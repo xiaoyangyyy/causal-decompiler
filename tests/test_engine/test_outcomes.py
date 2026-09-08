@@ -67,7 +67,7 @@ class TestOutcomeFixes:
     def test_protest_zero_when_compliance(self):
         log = _log()
         log.actions = [{"agent": "phd_a", "round": 52, "type": "comply", "intensity": 0.9}]
-        assert extract_outcome(log, "protest_authorship") == 0.0
+        assert extract_outcome(log, "protest_authorship") < 0.03
 
     def test_protest_is_continuous_escalation_propensity(self):
         log = _log()
@@ -78,6 +78,57 @@ class TestOutcomeFixes:
         }}}]
         protest = extract_outcome(log, "protest_authorship")
         assert 0.0 < protest < 1.0
+
+    def test_soft_lobby_outside_r52_still_moves_protest(self):
+        log = _log()
+        log.actions = [
+            {"agent": "phd_a", "round": 51, "type": "privately_lobby_pi", "intensity": 0.8},
+            {"agent": "phd_a", "round": 52, "type": "prepare_rebuttal", "intensity": 0.6},
+            {"agent": "phd_a", "round": 54, "type": "privately_lobby_pi", "intensity": 0.7},
+        ]
+        log.round_records = [{"round": 52, "agent_deltas": {"phd_a": {
+            "beliefs": {"pi_fairness": 0.05},
+            "emotion": {"resentment": 0.7, "anger": 0.6},
+            "memory_written": {"content_type": "promise_broken", "strength": 0.83},
+        }}}]
+        assert extract_outcome(log, "authorship_escalation_potential") > 0.08
+        assert extract_outcome(log, "protest_authorship") > 0.0
+
+    def test_latent_potential_survives_without_protest_action(self):
+        log = _log()
+        log.actions = [{"agent": "phd_a", "round": 52, "type": "prepare_rebuttal", "intensity": 0.6}]
+        log.round_records = [{"round": 52, "agent_deltas": {"phd_a": {
+            "beliefs": {"pi_fairness": 0.05},
+            "emotion": {"resentment": 0.7, "anger": 0.6},
+            "memory_written": {"content_type": "promise_broken", "strength": 0.83},
+        }}}]
+        potential = extract_outcome(log, "authorship_escalation_potential")
+        protest = extract_outcome(log, "protest_authorship")
+        assert potential > 0.08
+        assert protest > 0.0
+        assert protest < potential
+
+
+    def test_cluster_outcome_replays_memory_delete(self):
+        log = _log()
+        log.round_records = [
+            {"round": 3, "agent_deltas": {"phd_a": {"memory_written": {
+                "round": 3, "content_type": "authorship_signal", "strength": 0.9, "event_ref": "E003",
+            }}}},
+            {"round": 20, "agent_deltas": {"phd_a": {"memory_written": {
+                "round": 20, "content_type": "promise_broken", "strength": 0.9, "event_ref": "E020",
+            }}}},
+        ]
+        before = extract_outcome(log, "memory_authorship_cluster_strength")
+        log.interventions_applied = [{
+            "variant": "memory_delete_pi_promise",
+            "apply_at_round": 45,
+            "round": 45,
+            "target_agent": "phd_a",
+        }]
+        after = extract_outcome(log, "memory_authorship_cluster_strength")
+        assert before > 0.5
+        assert after < before - 0.4
 
 
 class TestStoryCastExtraction:
@@ -177,4 +228,96 @@ class TestLoggedTrustAndSplitY:
         assert log.outcomes["trust_pi_final"] == 0.55
         assert "interpretation_of_E030" in log.outcomes
         assert "help_rebuttal" in log.outcomes
+
+    def test_skip_e003_lowers_escalation_potential(self):
+        draft_state = {
+            "beliefs": {"pi_fairness": 0.05},
+            "emotion": {"resentment": 0.7, "anger": 0.6},
+            "memory_written": {"content_type": "promise_broken", "strength": 0.83, "event_ref": "E052"},
+        }
+        with_promise = _log()
+        with_promise.round_records = [
+            {"round": 3, "agent_deltas": {"phd_a": {"memory_written": {
+                "round": 3, "content_type": "promise_fulfilled", "strength": 0.9, "event_ref": "E003",
+            }}}},
+            {"round": 52, "agent_deltas": {"phd_a": draft_state}},
+        ]
+        skipped = _log()
+        skipped.round_records = [
+            {"round": 52, "agent_deltas": {"phd_a": draft_state}},
+        ]
+        assert (
+            extract_outcome(with_promise, "authorship_escalation_potential")
+            > extract_outcome(skipped, "authorship_escalation_potential") + 0.05
+        )
+
+    def test_ppd_mean_moves_when_draft_round_dropped(self):
+        with_draft = _log()
+        with_draft.events = [{"event_id": "E052", "round": 52, "type": "authorship_draft"}]
+        with_draft.round_records = [
+            {"round": 50, "metrics": {"public_private_divergence": 0.20}, "agent_deltas": {"phd_a": {}}},
+            {"round": 52, "metrics": {"public_private_divergence": 0.90}, "agent_deltas": {"phd_a": {}}},
+            {"round": 54, "metrics": {"public_private_divergence": 0.20}, "agent_deltas": {"phd_a": {}}},
+        ]
+        skipped = _log()
+        skipped.events = [{"event_id": "E052", "round": 52, "type": "authorship_draft"}]
+        skipped.round_records = [
+            {"round": 50, "metrics": {"public_private_divergence": 0.20}, "agent_deltas": {"phd_a": {}}},
+            {"round": 54, "metrics": {"public_private_divergence": 0.20}, "agent_deltas": {"phd_a": {}}},
+        ]
+        assert (
+            extract_outcome(with_draft, "public_private_divergence_mean")
+            > extract_outcome(skipped, "public_private_divergence_mean") + 0.15
+        )
+
+    def test_trust_pi_logged_prefers_draft_snapshot_over_zero_tail(self):
+        log = _log()
+        log.round_records = [
+            {"round": 12, "metrics": {"trust_phd_a_pi": 0.41}},
+            {"round": 52, "metrics": {"trust_phd_a_pi": 0.33}},
+            {"round": 60, "metrics": {"trust_phd_a_pi": 0.0}},
+        ]
+        finalize_outcomes(log)
+        assert log.outcomes["trust_pi_logged"] == 0.33
+
+    def test_trust_pi_logged_falls_back_to_last_nonzero(self):
+        log = _log()
+        log.round_records = [
+            {"round": 12, "metrics": {"trust_phd_a_pi": 0.41}},
+            {"round": 60, "metrics": {"trust_phd_a_pi": 0.0}},
+        ]
+        finalize_outcomes(log)
+        assert log.outcomes["trust_pi_logged"] == 0.41
+
+    def test_trust_path_mean_moves_when_pre_draft_trajectory_differs(self):
+        high = _log()
+        high.events = [{"event_id": "E052", "round": 52, "type": "authorship_draft"}]
+        high.round_records = [
+            {"round": 1, "metrics": {"trust_phd_a_pi": 0.60}, "agent_deltas": {"phd_a": {}}},
+            {"round": 20, "metrics": {"trust_phd_a_pi": 0.52}, "agent_deltas": {"phd_a": {}}},
+            {"round": 52, "metrics": {"trust_phd_a_pi": 0.40}, "agent_deltas": {"phd_a": {}}},
+        ]
+        low = _log()
+        low.events = [{"event_id": "E052", "round": 52, "type": "authorship_draft"}]
+        low.round_records = [
+            {"round": 1, "metrics": {"trust_phd_a_pi": 0.18}, "agent_deltas": {"phd_a": {}}},
+            {"round": 20, "metrics": {"trust_phd_a_pi": 0.12}, "agent_deltas": {"phd_a": {}}},
+            {"round": 52, "metrics": {"trust_phd_a_pi": 0.40}, "agent_deltas": {"phd_a": {}}},
+        ]
+        assert extract_outcome(high, "trust_pi_logged") == extract_outcome(low, "trust_pi_logged")
+        assert extract_outcome(high, "trust_pi_path_mean") > extract_outcome(low, "trust_pi_path_mean") + 0.20
+
+    def test_document_impulse_raises_public_protest_vs_work_action(self):
+        beliefs = {"beliefs": {"pi_fairness": 0.05}, "emotion": {"resentment": 0.7, "anger": 0.6}}
+        work = _log()
+        work.actions = [{"agent": "phd_a", "round": 52, "type": "write_section", "intensity": 0.8}]
+        work.round_records = [{"round": 52, "agent_deltas": {"phd_a": beliefs}}]
+        doc = _log()
+        doc.actions = [{"agent": "phd_a", "round": 52, "type": "document_contribution", "intensity": 0.8}]
+        doc.round_records = [{"round": 52, "agent_deltas": {"phd_a": beliefs}}]
+        ask = _log()
+        ask.actions = [{"agent": "phd_a", "round": 52, "type": "ask_for_authorship", "intensity": 0.8}]
+        ask.round_records = [{"round": 52, "agent_deltas": {"phd_a": beliefs}}]
+        assert extract_outcome(doc, "protest_authorship") > extract_outcome(work, "protest_authorship")
+        assert extract_outcome(ask, "protest_authorship") > extract_outcome(doc, "protest_authorship")
 

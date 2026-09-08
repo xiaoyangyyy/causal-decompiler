@@ -105,4 +105,4 @@ Without `z_i(t)`, LabWars is merely a simulator with many variables. With `z_i(t
 
 ## 8. Benchmark layer
 
-The formal state object is evaluated through the benchmark tasks in [`docs/13-Agent-Social-Dynamics-Benchmark.md`](13-Agent-Social-Dynamics-Benchmark.md).
+The formal state object is read by Causal MRI on the canonical 14-agent trajectory. See [`docs/18-Causal-Decompiler-Paper-Protocol.md`](18-Causal-Decompiler-Paper-Protocol.md).

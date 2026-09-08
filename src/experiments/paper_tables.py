@@ -31,18 +31,50 @@ def table_split_y(report: dict[str, Any]) -> str:
 def table_memory_irf(report: dict[str, Any]) -> str:
     rows = report.get("memory_irf") or []
     lines = [
-        "### Table. Memory IRF (delete-time analogue of indirect effect)",
+        "### Table. Memory IRF (public vs private over delete-time)",
         "",
-        "| Delete at | ATE | Factual Y | Twin Y |",
-        "|---|---:|---:|---:|",
+        "| Delete at | Δ protest | Δ potential | Δ PPD | Δ trust_path | Δ cluster | Fork |",
+        "|---|---:|---:|---:|---:|---:|---|",
     ]
     if not rows:
-        lines.append("| _none_ | | | |")
+        lines.append("| _none_ | | | | | | |")
         return "\n".join(lines)
     for item in rows:
+        split = (item.get("extras") or {}).get("split") or {}
+        fork = (item.get("extras") or {}).get("fork") or {}
+        fork_cell = "identical" if fork.get("identical") else f"R{fork.get('round')} {fork.get('channel')}"
         lines.append(
-            f"| `{item.get('factor_id')}` | {_fmt(item.get('ate'), 4)} | "
-            f"{_fmt(item.get('factual_y'), 4)} | {_fmt(item.get('twin_y'), 4)} |"
+            f"| `{item.get('factor_id')}` | "
+            f"{_fmt((split.get('protest_authorship') or {}).get('ate', item.get('ate')), 4)} | "
+            f"{_fmt((split.get('authorship_escalation_potential') or {}).get('ate'), 4)} | "
+            f"{_fmt((split.get('public_private_divergence_mean') or {}).get('ate'), 4)} | "
+            f"{_fmt((split.get('trust_pi_path_mean') or {}).get('ate'), 4)} | "
+            f"{_fmt((split.get('memory_authorship_cluster_strength') or {}).get('ate'), 4)} | "
+            f"{fork_cell} |"
+        )
+    return "\n".join(lines)
+
+
+def table_forks(report: dict[str, Any]) -> str:
+    rows = report.get("forks") or []
+    lines = [
+        "### Table. First divergence from the factual transcript",
+        "",
+        "| Patch | Factor | Round | Agent | Channel | Factual | Twin |",
+        "|---|---|---:|---|---|---|---|",
+    ]
+    if not rows:
+        lines.append("| _none_ | | | | | | |")
+        return "\n".join(lines)
+    for item in rows:
+        if item.get("identical"):
+            lines.append(
+                f"| `{item.get('patch')}` | `{item.get('factor_id')}` | | | identical | | |"
+            )
+            continue
+        lines.append(
+            f"| `{item.get('patch')}` | `{item.get('factor_id')}` | {item.get('round')} | "
+            f"`{item.get('agent')}` | {item.get('channel')} | `{item.get('factual')}` | `{item.get('twin')}` |"
         )
     return "\n".join(lines)
 
@@ -103,7 +135,8 @@ def table_three_worlds(report: dict[str, Any]) -> str:
         f"ATE total={_fmt(worlds.get('ate_total'), 4)}; "
         f"omniscient={_fmt(worlds.get('ate_omniscient'), 4)}; "
         f"gated channel={_fmt(worlds.get('gated_channel'), 4)}; "
-        f"hypocrisy index={_fmt(worlds.get('hypocrisy_index'), 4)}.",
+        f"hypocrisy index={_fmt(worlds.get('hypocrisy_index'), 4)} "
+        f"on `{worlds.get('factor_id', '')}`.",
     ]
     return "\n".join(lines)
 
@@ -145,7 +178,8 @@ def table_contrasts(contrasts: list[dict[str, Any]]) -> str:
 def latex_split_y(report: dict[str, Any]) -> str:
     split = report.get("split_y") or {}
     rows = "\n".join(
-        f"{key.replace('_', '\\_')} & {_fmt(val, 4)} \\\\" for key, val in split.items()
+        "%s & %s \\\\" % (str(key).replace("_", r"\_"), _fmt(val, 4))
+        for key, val in split.items()
     )
     return (
         "\\begin{tabular}{lr}\n\\toprule\nEstimand & Value \\\\\n\\midrule\n"
@@ -173,6 +207,8 @@ def render_paper_markdown(
         table_split_y(report),
         "",
         table_memory_irf(report),
+        "",
+        table_forks(report),
         "",
         table_shapley(report),
         "",

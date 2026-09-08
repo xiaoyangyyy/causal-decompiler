@@ -62,6 +62,13 @@ def _event_valence_for_pair(event: EventAtom, src: str, tgt: str) -> float:
             return 0.30 * event.memory_salience
     if event.type == "authorship_ambiguity" and tgt == "pi":
         return -0.20 * event.memory_salience
+    if event.type == "authorship_promise" and tgt == "pi":
+        return 0.28 * event.memory_salience
+    if event.type == "authorship_draft" and tgt == "pi":
+        severity = str(event.payload.get("draft_severity") or event.framing or "")
+        if severity in {"honored", "positive"} or event.framing == "positive":
+            return 0.22 * event.memory_salience
+        return -0.32 * event.memory_salience
     return 0.0
 
 
@@ -99,11 +106,23 @@ def update_relationships(
         agent_src = agents.get(src)
         agent_tgt = agents.get(tgt)
 
+        harm = max(0.0, -pair_valence)
         trust_delta = eta * math.tanh(pair_valence * 3.0 + recall_mod)
-        trust_delta -= eta * 0.35 * edge.resentment * softplus(credit_j)
+        # Credit-threat drain only on actual harm. A 0.35 residual used to
+        # grind every internal edge to the 0.06 floor by mid-story.
+        trust_delta -= eta * 0.22 * edge.resentment * softplus(max(0.0, credit_j)) * harm
+        if pair_valence > 0.04:
+            trust_delta += eta * 0.24 * pair_valence * (1.0 - edge.trust)
+        if edge.trust < 0.20:
+            trust_delta += eta * 0.20 * (0.20 - edge.trust) * (1.0 - 0.55 * edge.resentment)
 
-        resent_delta = eta * softplus(-pair_valence) * 0.8
-        resent_delta += eta * credit_j * (agent_src.personality.credit_sensitivity if agent_src else 0.5)
+        resent_delta = eta * harm * 1.15
+        if pair_valence < 0.0:
+            resent_delta += eta * 0.28 * max(0.0, credit_j) * (
+                agent_src.personality.credit_sensitivity if agent_src else 0.5
+            )
+        else:
+            resent_delta -= eta * 0.16 * edge.resentment
 
         coop = agent_src.personality.cooperation if agent_src else 0.5
         recip = agent_src.personality.reciprocity if agent_src else 0.5
@@ -147,7 +166,7 @@ def update_relationships(
         new_edge = RelationshipEdge(
             source=edge.source,
             target=edge.target,
-            trust=round(clamp(edge.trust + deltas_trust.get(key, 0.0)), 4),
+            trust=round(max(0.06, clamp(edge.trust + deltas_trust.get(key, 0.0))), 4),
             resentment=round(clamp(edge.resentment + deltas_resent.get(key, 0.0)), 4),
             dependency=round(clamp(edge.dependency + deltas_trust.get(key, 0.0) * 0.05), 4),
             obligation=round(clamp(edge.obligation + deltas_obligation.get(key, 0.0)), 4),
@@ -279,6 +298,9 @@ def _apply_action_to_deltas(
         reverse = (tgt, src)
         deltas_trust[reverse] = deltas_trust.get(reverse, 0.0) + eta * 0.18 * intensity
         deltas_credit[reverse] = deltas_credit.get(reverse, 0.0) + eta * 0.35 * intensity
+    elif atype in ("ask_for_authorship", "request_mediation"):
+        deltas_trust[key] = deltas_trust.get(key, 0.0) - eta * 0.28 * intensity
+        deltas_credit[key] = deltas_credit.get(key, 0.0) + eta * 0.25 * intensity
     elif atype in ("challenge_claim", "confront", "blame"):
         deltas_trust[key] = deltas_trust.get(key, 0.0) - eta * 0.65 * intensity
         deltas_resent[key] = deltas_resent.get(key, 0.0) + eta * 0.70 * intensity

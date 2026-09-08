@@ -59,7 +59,7 @@ motive_weights:
 event_affinity:
   authorship_promise: {ask_for_authorship: 0.15, privately_lobby_pi: 0.12, document_contribution: 0.08}
   authorship_ambiguity: {privately_lobby_pi: 0.16, ask_for_authorship: 0.13, document_contribution: 0.10, confront: 0.06}
-  authorship_draft: {ask_for_authorship: 0.18, privately_lobby_pi: 0.13, document_contribution: 0.10, confront: 0.08}
+  authorship_draft: {ask_for_authorship: 0.28, privately_lobby_pi: 0.20, document_contribution: 0.12, confront: 0.10, prepare_rebuttal: -0.12, run_experiment: -0.08, comply: -0.10}
   credit_dispute: {document_contribution: 0.14, challenge_claim: 0.12, request_mediation: 0.08}
   experiment_failure: {analyze_failure: 0.16, debug_code: 0.14, share_result: 0.07}
   baseline_failure: {improve_baseline: 0.18, analyze_failure: 0.12}

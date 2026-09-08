@@ -1,4 +1,4 @@
-﻿# 行为生成与 LLM 分工审计
+# 行为生成与 LLM 分工审计
 
 本文专门澄清 LabWars 当前的行为生成机制，避免把系统误读成“LLM 自由写剧情”或“纯手写规则触发”。
 
@@ -21,7 +21,7 @@
 | scoring/rendering prompt | `src/engine/prompts.py` |
 | LLM drift 审计 | `src/engine/critic.py` |
 | action-field 参数 | `config/action_field.yaml` |
-| action-field 消融 | `src/experiments/action_field_ablation.py` |
+| λ lesion | `python -m src.experiments paper --include-lambda` |
 
 真实流程是：
 
@@ -275,14 +275,12 @@ generate_action_candidates -> LLM candidate scoring -> fused sampler
 | `LLM Override Pressure` | field ranking 到 fused ranking 的 rank-shift 压力 |
 | `selected_rank_lift` | selected action 在 fused ranking 中相对 field ranking 提升了多少位 |
 
-还新增 `run_llm_mix_ablation` 专门扫描：
+λ 由 CausalOp `set_policy_lambda` 切换，不是 mix 扫描矩阵：
 
 ```text
-mix = 0.0  # field only
-mix = 0.2
-mix = 0.35
-mix = 0.6
-mix = 1.0  # LLM-heavy
+λ = 0.0   # field only
+λ = 0.35  # default dual_engine
+λ = 1.0   # LLM-heavy (cache miss)
 ```
 
 默认比较：
@@ -338,17 +336,13 @@ probability = softmax(fused_tendency)
 同一批 agent、记忆和事件压力下，学术内斗轨迹主要来自结构性社会压力，还是来自 LLM 对情境的语言认知解释？
 ```
 
-对应实验接口：
+对应实验接口是 Causal MRI 的 λ 补丁，不是独立扫描矩阵：
 
 ```python
-from src.engine.simulation import SimConfig
-from src.experiments.llm_mix_ablation import run_dual_engine_ablation
+from src.engine.causal.algebra import set_policy_lambda
+from src.engine.causal.twin import run_twin
 
-result = run_dual_engine_ablation(
-    SimConfig(max_rounds=60, interventions=[]),
-    lambda_values=[0.0, 0.2, 0.35, 0.6, 1.0],
-    seeds=list(range(10)),
-)
+twin = run_twin(cfg, [set_policy_lambda(1.0)], llm_trace=factual.llm_cache)
 ```
 
 它会比较：
@@ -470,18 +464,7 @@ LabWars 不应对外宣称“完全无启发式”或“LLM 自由生成真实�
 是否比 dual_engine 更难反事实？
 ```
 
-实验接口：
-
-```python
-from src.engine.simulation import SimConfig
-from src.experiments.policy_mode_comparison import run_policy_mode_comparison
-
-result = run_policy_mode_comparison(
-    SimConfig(max_rounds=60, interventions=[]),
-    policy_modes=["social_physics", "dual_engine", "llm_native"],
-    seeds=list(range(10)),
-)
-```
+三种 `policy_mode` 由 `SimConfig` 切换。论文默认 `dual_engine`；`social_physics` 与 `llm_native` 是机制对照，不是规模扫描。
 
 这使项目的核心问题变成：
 

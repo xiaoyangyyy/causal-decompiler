@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.engine.causal import run_causal_experiment
+from src.engine.causal.algebra import delete_memory
+from src.engine.causal.twin import run_factual, run_twin
 from src.engine.critic import CriticAgent
 from src.engine.intervention import Intervention, apply_event_override, apply_memory_intervention, load_interventions
+from src.engine.run_log import extract_outcome
 from src.engine.simulation import SimConfig, load_mvp_config, run_simulation
 from src.cognition.pipeline import process_event_phase
 from src.engine.event_agent import EventAgent
@@ -70,6 +72,9 @@ class TestInterventions:
             if m.get("content_type") in ("authorship_signal", "promise_fulfilled", "promise_broken")
         ]
         assert auth_mem
+        agent = world.agents["phd_a"]
+        resentment = agent.emotion.resentment
+        fairness = agent.beliefs.pi_fairness
         apply_memory_intervention(world, inter)
         remaining = [
             m for m in world.agents["phd_a"].memory
@@ -77,6 +82,8 @@ class TestInterventions:
             and m.get("round", 0) <= 45
         ]
         assert not remaining
+        assert agent.emotion.resentment == resentment
+        assert agent.beliefs.pi_fairness == fairness
 
     def test_three_interventions_differ(self):
         inters = load_interventions()
@@ -105,16 +112,22 @@ class TestCritic:
 
 
 class TestCausal:
-    def test_causal_experiment_runs(self):
-        delete = next(i for i in load_interventions() if i.intervention_id == "INT_MEMORY_DELETE")
-        cfg = SimConfig(mvp=True, max_rounds=52)
-        result = run_causal_experiment(cfg, delete, outcome="protest_authorship", n_seeds=3)
-        assert result.n_seeds == 3
+    def test_memory_delete_twin_runs(self):
+        cfg = SimConfig(mvp=True, max_rounds=12, seed=3, llm_provider="scripted")
+        factual = run_factual(cfg)
+        twin = run_twin(cfg, [delete_memory(3)], llm_trace=factual.llm_cache)
+        assert twin.outcomes
+        assert twin.run_id != factual.run_id
 
     def test_memory_delete_reduces_authorship_cluster(self):
-        delete = next(i for i in load_interventions() if i.intervention_id == "INT_MEMORY_DELETE")
-        cfg = SimConfig(max_rounds=55, seed=42)
-        result = run_causal_experiment(cfg, delete, outcome="protest_authorship", n_seeds=5)
-        cluster_ctrl = sum(p["M_control"] for p in result.per_seed) / len(result.per_seed)
-        cluster_treat = sum(p["M_treatment"] for p in result.per_seed) / len(result.per_seed)
+        cfg = SimConfig(max_rounds=55, seed=42, llm_provider="scripted")
+        factual = run_factual(cfg)
+        twin = run_twin(cfg, [delete_memory(45)], llm_trace=factual.llm_cache)
+        cluster_ctrl = extract_outcome(factual, "memory_authorship_cluster_strength")
+        cluster_treat = extract_outcome(twin, "memory_authorship_cluster_strength")
         assert cluster_treat <= cluster_ctrl + 0.01
+        if cluster_ctrl > 0.05:
+            assert cluster_treat < cluster_ctrl
+            pot_ctrl = extract_outcome(factual, "authorship_escalation_potential")
+            pot_treat = extract_outcome(twin, "authorship_escalation_potential")
+            assert abs(pot_treat - pot_ctrl) > 1e-4 or cluster_treat < cluster_ctrl - 0.05

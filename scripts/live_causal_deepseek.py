@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 
 from src.engine.llm_adapter import OpenAIAdapter  # noqa: E402
 from src.engine.simulation import SimConfig  # noqa: E402
-from src.experiments.causal_mri import run_causal_mri  # noqa: E402
+from src.experiments.paper_protocol import run_paper_protocol  # noqa: E402
 
 MODELS = ("deepseek-v4-flash", "deepseek-chat")
 
@@ -37,6 +37,7 @@ def _pick_adapter() -> OpenAIAdapter:
             base_url="https://api.deepseek.com",
             request_delay_sec=0.4,
             max_retries=2,
+            extra_body={"thinking": {"type": "disabled"}},
         )
         try:
             ping = adapter.complete_json(
@@ -53,7 +54,7 @@ def _pick_adapter() -> OpenAIAdapter:
 
 def main() -> None:
     adapter = _pick_adapter()
-    result = run_causal_mri(
+    result = run_paper_protocol(
         SimConfig(
             max_rounds=3,
             seed=7,
@@ -64,14 +65,13 @@ def main() -> None:
             policy_mode="dual_engine",
             cognitive_sampling_top_k=1,
         ),
-        blame_limit=0,
-        memory_rounds=None,
         include_toy_shapley=True,
+        auto_battery=False,
         write_output=True,
         output_dir=ROOT / "output" / "reports",
     )
-    report = result["report"]
-    print(result["summary"])
+    report = result.report
+    print(result.summary)
     print(
         "LIVE_ASSERT "
         f"identity={report.identity_twin_ok} "

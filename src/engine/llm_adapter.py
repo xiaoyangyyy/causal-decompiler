@@ -221,6 +221,7 @@ class OpenAIAdapter(LLMAdapter):
         request_delay_sec: float = 0.0,
         top_p: float | None = None,
         max_retries: int = 8,
+        extra_body: dict[str, Any] | None = None,
     ) -> None:
         from openai import OpenAI
 
@@ -237,6 +238,7 @@ class OpenAIAdapter(LLMAdapter):
         self.request_delay_sec = request_delay_sec
         self.top_p = top_p
         self.max_retries = max_retries
+        self.extra_body = extra_body
         self._last_request_at = 0.0
 
     def _throttle(self) -> None:
@@ -265,6 +267,8 @@ class OpenAIAdapter(LLMAdapter):
                     kwargs["response_format"] = {"type": "json_object"}
                 if self.top_p is not None:
                     kwargs["top_p"] = self.top_p
+                if self.extra_body:
+                    kwargs["extra_body"] = self.extra_body
                 response = self.client.chat.completions.create(**kwargs)
                 self._last_request_at = time.monotonic()
                 message = response.choices[0].message
@@ -368,6 +372,16 @@ class OllamaAdapter(LLMAdapter):
         return _parse_json_content(content)
 
 
+def _extra_body_from_config(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    extra = dict(cfg.get("extra_body") or {})
+    thinking = cfg.get("thinking")
+    if thinking in {False, "disabled", "off", "none"}:
+        extra["thinking"] = {"type": "disabled"}
+    elif isinstance(thinking, dict):
+        extra["thinking"] = thinking
+    return extra or None
+
+
 def load_llm_config(path: Path | None = None) -> dict[str, Any]:
     env_path = os.environ.get("LABWARS_LLM_CONFIG")
     p = path or (Path(env_path) if env_path else LLM_CONFIG_PATH)
@@ -422,6 +436,7 @@ def get_adapter(
             request_delay_sec=delay,
             top_p=float(tp) if tp is not None else None,
             max_retries=retries,
+            extra_body=_extra_body_from_config(cfg),
         )
     if prov == "anthropic":
         env_key = cfg.get("api_key_env", "ANTHROPIC_API_KEY")

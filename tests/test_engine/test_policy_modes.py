@@ -1,11 +1,10 @@
-﻿"""Tests for policy_mode contrast tracks."""
+"""Tests for policy_mode contrast tracks."""
 
 from __future__ import annotations
 
 from src.engine.event_agent import EventAgent
 from src.engine.role_policy import RolePolicyAgent
 from src.engine.simulation import SimConfig, run_simulation
-from src.experiments.policy_mode_comparison import run_policy_mode_comparison
 from src.world.loader import load_world
 
 
@@ -30,13 +29,9 @@ def test_social_physics_policy_is_field_only():
     assert all(a.get("llm_action_scoring", {}).get("source") == "field_only" for a in log.actions)
 
 
-def test_policy_mode_comparison_runs():
-    result = run_policy_mode_comparison(
-        SimConfig(max_rounds=3, interventions=[]),
-        policy_modes=["social_physics", "dual_engine", "llm_native"],
-        seeds=[0],
-        outcomes=["authorship_dispute_index", "llm_native_candidate_fraction"],
-    )
-    assert result.n_per_mode == 1
-    assert set(result.summary) == {"social_physics", "dual_engine", "llm_native"}
-    assert result.summary["llm_native"]["llm_native_candidate_fraction"] > 0.0
+def test_dual_engine_and_native_modes_run():
+    field = run_simulation(SimConfig(max_rounds=3, seed=0, interventions=[], policy_mode="social_physics", llm_provider="scripted"))
+    dual = run_simulation(SimConfig(max_rounds=3, seed=0, interventions=[], policy_mode="dual_engine", llm_provider="scripted"))
+    native = run_simulation(SimConfig(max_rounds=3, seed=0, interventions=[], policy_mode="llm_native", llm_provider="scripted"))
+    assert field.actions and dual.actions and native.actions
+    assert any(a.get("llm_action_scoring", {}).get("source") == "llm_native_generated" for a in native.actions)

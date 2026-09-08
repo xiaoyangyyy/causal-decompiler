@@ -47,18 +47,19 @@ These lesions are not arbitrary scenario changes. They are mechanism removals: t
 
 ## 4. Scientific protocol
 
-The reviewer-facing protocol is:
+The reviewer-facing protocol is Causal MRI of one 14-agent / 60-round trajectory:
 
 ```text
-population_size = 10, 50, 100, 500
-rounds = 500
-seeds = 100
-conditions = baseline, no_memory, no_status, no_trust, no_hierarchy
-policy_mode = social_physics
-llm_provider = scripted
+identity twin
+split-Y
+memory IRF at story beats
+Shapley vs skip
+three-worlds
+optional λ lesion
+A/B/C/D/V as CRN twins of one control
 ```
 
-This protocol tests whether power centers, coalitions, hierarchy, conflict cascades, and credit inequality remain measurable beyond the canonical 14-agent story.
+See [`docs/18-Causal-Decompiler-Paper-Protocol.md`](18-Causal-Decompiler-Paper-Protocol.md).
 
 ## 5. Claim boundary
 

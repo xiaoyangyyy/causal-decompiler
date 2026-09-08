@@ -1,4 +1,4 @@
-﻿"""Critic Agent 鈥?action consistency audit."""
+"""Critic Agent 鈥?action consistency audit."""
 
 from __future__ import annotations
 
@@ -18,14 +18,17 @@ class Violation:
 
 
 ACTION_PUBLIC_COMPATIBILITY: dict[str, set[str]] = {
-    "confront": {"challenge", "concern", "authorship_claim", "neutral"},
-    "challenge_claim": {"challenge", "concern", "authorship_claim", "neutral"},
-    "ask_for_authorship": {"authorship_claim", "concern", "neutral"},
-    "privately_lobby_pi": {"neutral", "concern", "team_support"},
+    "confront": {"self_advocacy", "challenge", "concern", "authorship_claim", "neutral"},
+    "challenge_claim": {"self_advocacy", "challenge", "concern", "authorship_claim", "neutral"},
+    "ask_for_authorship": {"self_advocacy", "authorship_claim", "concern", "neutral"},
+    "privately_lobby_pi": {"self_advocacy", "neutral", "concern", "team_support"},
     "undermine_teammate": {"neutral", "concern", "team_support"},
     "support_teammate": {"team_support", "neutral"},
-    "document_contribution": {"authorship_claim", "neutral", "concern"},
-    "withdraw": {"concern", "neutral"},
+    "document_contribution": {"self_advocacy", "authorship_claim", "neutral", "concern"},
+    "request_mediation": {"self_advocacy", "authorship_claim", "concern", "neutral"},
+    "cite_prior_memory": {"self_advocacy", "authorship_claim", "neutral", "concern"},
+    "withdraw": {"self_advocacy", "concern", "neutral"},
+    "rebel": {"self_advocacy", "challenge", "concern"},
     "comply": {"team_support", "neutral"},
 }
 

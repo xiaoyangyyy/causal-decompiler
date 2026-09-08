@@ -17,7 +17,7 @@ from src.engine.causal.noise import STREAM_ACTION_JITTER, STREAM_ACTION_SAMPLE, 
 from src.engine.diversity import action_usage_counts
 from src.world.actions import ACTION_CATEGORIES, ActionType
 from src.world.models import Agent, EventAtom, RelationshipEdge, WorldState
-from src.world.organization import can_directly_observe, observation_gain, primary_authority
+from src.world.organization import can_directly_observe, observation_gain, primary_authority, resolve_event_cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ACTION_FIELD_CONFIG = PROJECT_ROOT / "config" / "action_field.yaml"
@@ -132,10 +132,11 @@ def _base_motives(agent: Agent, world: WorldState, event: EventAtom, target: str
     personality = agent.personality
 
     authorship_anxiety = _clamp(
-        0.35 * (1.0 - beliefs.my_first_author_probability)
-        + 0.25 * (1.0 - beliefs.my_contribution_recognized)
-        + 0.20 * project.authorship_conflict
-        + 0.20 * personality.credit_sensitivity
+        0.28 * (1.0 - beliefs.my_first_author_probability)
+        + 0.18 * (1.0 - beliefs.my_contribution_recognized)
+        + 0.16 * project.authorship_conflict
+        + 0.16 * personality.credit_sensitivity
+        + 0.22 * mem["memory_pressure"]
     )
     resentment_drive = _clamp(
         0.35 * emotion.resentment
@@ -244,7 +245,15 @@ ACTION_MOTIVE_WEIGHTS: dict[str, dict[str, float]] = {
 EVENT_AFFINITY: dict[str, dict[str, float]] = {
     "authorship_promise": {"ask_for_authorship": 0.15, "privately_lobby_pi": 0.12, "document_contribution": 0.08},
     "authorship_ambiguity": {"privately_lobby_pi": 0.16, "ask_for_authorship": 0.13, "document_contribution": 0.10, "confront": 0.06},
-    "authorship_draft": {"ask_for_authorship": 0.18, "privately_lobby_pi": 0.13, "document_contribution": 0.10, "confront": 0.08},
+    "authorship_draft": {
+        "ask_for_authorship": 0.28,
+        "privately_lobby_pi": 0.20,
+        "document_contribution": 0.12,
+        "confront": 0.10,
+        "prepare_rebuttal": -0.12,
+        "run_experiment": -0.08,
+        "comply": -0.10,
+    },
     "credit_dispute": {"document_contribution": 0.14, "challenge_claim": 0.12, "request_mediation": 0.08},
     "experiment_failure": {"analyze_failure": 0.16, "debug_code": 0.14, "share_result": 0.07},
     "baseline_failure": {"improve_baseline": 0.18, "analyze_failure": 0.12},
@@ -252,6 +261,12 @@ EVENT_AFFINITY: dict[str, dict[str, float]] = {
     "negative_result_hidden": {"analyze_failure": 0.10, "leak_concern": 0.08, "hide_negative_result": 0.06},
     "integrity_dispute": {"analyze_failure": 0.12, "debug_code": 0.10, "leak_concern": 0.07},
 }
+
+
+DRAFT_WORK_ACTIONS = frozenset({
+    "write_section", "run_experiment", "prepare_rebuttal", "improve_baseline",
+    "debug_code", "analyze_failure",
+})
 
 
 DEFAULT_ACTION_FIELD_PARAMS = {
@@ -372,7 +387,14 @@ def generate_action_candidates(
     observed = gain > 0.0
     social_field = compute_social_potential(world, agent, event, recall)
     social_mix = float(params.get("social_potential_mix", 0.0))
-    for action in allowed_actions:
+    idea_id = resolve_event_cast(world).idea
+    block_work = event.type == "authorship_draft" and agent.id == idea_id
+    actions_to_score = [
+        action for action in allowed_actions
+        if not (block_work and action in DRAFT_WORK_ACTIONS)
+    ] or list(allowed_actions)
+    block_work = block_work and actions_to_score != list(allowed_actions)
+    for action in actions_to_score:
         target = _target_for_action(action, agent, world, event)
         motives = _base_motives(agent, world, event, target, recall)
         weights = motive_weights.get(action, {})
@@ -445,6 +467,8 @@ def generate_action_candidates(
     kept = candidates[: max(1, min(top_n, len(candidates)))]
     arousal = agent.emotion.anger + agent.emotion.resentment + agent.emotion.anxiety * 0.5
     temperature = float(params["temperature_base"]) + float(params["temperature_arousal_scale"]) * (1.0 - _clamp(arousal / float(params["temperature_arousal_norm"])))
+    if block_work:
+        temperature *= 0.55
     probs = _softmax([c.tendency for c in kept], temperature=temperature)
     for candidate, prob in zip(kept, probs):
         candidate.probability = prob

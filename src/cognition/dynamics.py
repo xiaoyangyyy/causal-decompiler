@@ -98,23 +98,39 @@ def apply_saturating_emotion_delta(current: float, impulse: float) -> float:
     neg = clamp(current - impulse_response(magnitude, sensitivity=1.0, saturation=3.2))
     return clamp(positive_gate * pos + (1.0 - positive_gate) * neg)
 
+# Cluster is a saturating SUM of memories (typically 0–8), not a [0, 1] load.
+# Center ~2.4 keeps early vs late deletion inside the steep region of the gate.
+CLUSTER_GATE_CENTER = 2.4
+CLUSTER_GATE_STEEPNESS = 0.85
+# Without protest actions the latent channel must stay visible to MRI.
+ESCALATION_LATENT_FLOOR = 0.40
+
+
 def escalation_potential_from_state(
     beliefs: dict[str, float],
     emotion: dict[str, float],
     *,
     promise_broken: float = 0.0,
     promise_cluster: float = 0.0,
+    promise_anchor: float | None = None,
 ) -> float:
     """Latent protest potential before R52 actions — smooth phase-transition proxy."""
     unfairness = 1.0 - beliefs.get("pi_fairness", 0.5)
     resentment = emotion.get("resentment", 0.0)
     anger = emotion.get("anger", 0.0)
-    memory_load = logistic_gate(promise_cluster, center=0.35, steepness=4.0)
+    memory_load = logistic_gate(
+        promise_cluster, center=CLUSTER_GATE_CENTER, steepness=CLUSTER_GATE_STEEPNESS,
+    )
     broken_load = logistic_gate(promise_broken, center=0.30, steepness=5.5)
     emotional_gate = logistic_gate(resentment, center=0.42, steepness=5.0)
     unfairness_gate = logistic_gate(unfairness, center=0.32, steepness=4.5)
     anger_gate = 0.55 + 0.45 * logistic_gate(anger, center=0.28, steepness=4.0)
-    memory_term = 0.30 + 0.45 * memory_load + 0.35 * broken_load
+    if promise_anchor is None:
+        memory_term = 0.30 + 0.45 * memory_load + 0.35 * broken_load
+    else:
+        # Promise ∧ draft: skip E003 must be able to kill the memory term.
+        anchor_load = logistic_gate(promise_anchor, center=0.22, steepness=7.0)
+        memory_term = 0.12 + 0.38 * anchor_load + 0.50 * broken_load * (0.20 + 0.80 * anchor_load)
     return clamp(emotional_gate * unfairness_gate * memory_term * anger_gate)
 
 
@@ -123,7 +139,7 @@ def action_escalation_impulse(
     intensity: float,
     *,
     escalated_weight: float = 0.55,
-    soft_weight: float = 0.12,
+    soft_weight: float = 0.20,
 ) -> float:
     inten = max(0.0, min(1.0, intensity))
     if action_type in ESCALATED_ACTIONS:
@@ -131,12 +147,20 @@ def action_escalation_impulse(
         return escalated_weight * damp
     if action_type in {"ask_for_authorship", "privately_lobby_pi"}:
         return soft_weight * inten
+    if action_type in {"document_contribution", "request_mediation", "cite_prior_memory"}:
+        return 0.12 * inten
     return 0.0
 
 
 def combine_escalation_score(potential: float, action_impulse_sum: float) -> float:
-    """Potential × saturating action perturbation — avoids linear ceiling at 1.0."""
-    return clamp(potential * (1.0 - math.exp(-action_impulse_sum)))
+    """Latent potential stays visible without a protest act; impulse raises the rest.
+
+    The previous form `potential * (1 - exp(-impulse))` zeroed Y whenever the
+    idea agent did not emit a protest action in the measurement window, so
+    memory/event do() could not be identified on the headline estimand.
+    """
+    acted = 1.0 - math.exp(-max(0.0, action_impulse_sum))
+    return clamp(potential * (ESCALATION_LATENT_FLOOR + (1.0 - ESCALATION_LATENT_FLOOR) * acted))
 
 
 def draft_rank_shock(agent: Agent, event: EventAtom, cluster: float) -> tuple[float, float]:

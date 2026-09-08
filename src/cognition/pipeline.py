@@ -37,6 +37,7 @@ from src.world.organization import (
     default_private_intent,
     observation_channel,
     perceived_event,
+    resolve_event_cast,
     rumor_recipients,
 )
 
@@ -164,12 +165,18 @@ def commit_cognition_phase(
 
     internal = world.world_config.get("internal_agents", [])
     n = max(1, len(channels))
+    cast = resolve_event_cast(world)
+    idea_div = 0.0
+    if cast.idea in world.agents:
+        idea_div = compute_divergence(world.agents[cast.idea])
     metrics = {
         "authorship_dispute_index": authorship_dispute_index(world),
         "trust_fragmentation": trust_fragmentation(world.relationships, internal),
         "coalition_strength": coalition_strength(world.relationships),
         "credit_threat_density": credit_threat_density(world.relationships),
-        "public_private_divergence": mean_divergence(world.agents, internal),
+        "public_private_divergence": idea_div,
+        "public_private_divergence_idea": idea_div,
+        "public_private_divergence_lab": mean_divergence(world.agents, internal),
         "observation_direct_share": round(sum(1 for c in channels.values() if c == "direct") / n, 4),
         "observation_rumor_share": round(sum(1 for c in channels.values() if c == "rumor") / n, 4),
         "observation_blind_share": round(sum(1 for c in channels.values() if c == "none") / n, 4),

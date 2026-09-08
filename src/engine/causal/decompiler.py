@@ -12,9 +12,11 @@ from typing import Any
 from src.engine.causal.algebra import CausalOp
 from src.engine.causal.estimands import (
     EffectEstimate,
-    beat_event_ids,
+    and_event_ids,
     contrastive_event_effects,
     default_memory_irf_rounds,
+    draft_beat_op,
+    first_divergence,
     lambda_lesion_effects,
     memory_irf,
     paired_effect,
@@ -24,7 +26,7 @@ from src.engine.causal.estimands import (
     story_shapley,
     three_worlds,
 )
-from src.engine.causal.toy import coalition_value, contrastive_leave_one_out, exact_shapley, planted_factors
+from src.engine.causal.toy import contrastive_leave_one_out, exact_shapley, planted_factors, planted_outcome
 from src.engine.causal.twin import identity_holds, run_factual, run_twin, sim_config_from_log
 from src.engine.run_log import RunLog, extract_outcome
 from src.engine.simulation import SimConfig
@@ -45,6 +47,7 @@ class CausalMRIReport:
     contrastive_toy_lie: dict[str, float] = field(default_factory=dict)
     story_shapley: dict[str, Any] = field(default_factory=dict)
     three_worlds: dict[str, Any] = field(default_factory=dict)
+    forks: list[dict[str, Any]] = field(default_factory=list)
     lambda_effects: list[dict[str, Any]] = field(default_factory=list)
     probes: list[dict[str, Any]] = field(default_factory=list)
     findings: list[str] = field(default_factory=list)
@@ -55,9 +58,54 @@ class CausalMRIReport:
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
+    def summary(self) -> str:
+        irf = self.memory_irf[0] if self.memory_irf else None
+        skip = self.contrastive[0] if self.contrastive else None
+        replay = self.llm_replay or {}
+        lines = [
+            f"run={self.factual_run_id} identity={self.identity_twin_ok} Y={self.factual_y:.4f}",
+            (
+                f"replay hits={replay.get('identity_run_hits', 0)} "
+                f"misses={replay.get('identity_run_misses', 0)}"
+            ),
+        ]
+        lines.extend(f"finding: {item}" for item in (self.findings or [])[:6])
+        if irf:
+            split = (irf.get("extras") or {}).get("split") or {}
+            ppd = (split.get("public_private_divergence_mean") or {}).get("ate")
+            pot = (split.get("authorship_escalation_potential") or {}).get("ate")
+            extra = f" ΔPPD={float(ppd):+.4f}" if ppd is not None else ""
+            if pot is not None:
+                extra += f" Δpotential={float(pot):+.4f}"
+            trust = (split.get("trust_pi_path_mean") or {}).get("ate")
+            if trust is not None:
+                extra += f" Δtrust_path={float(trust):+.4f}"
+            lines.append(f"memory IRF {irf.get('factor_id')} ATE={float(irf.get('ate', 0.0)):+.4f}{extra}")
+        fork = next(
+            (item for item in self.forks if not item.get("identical") and item.get("patch") != "identity"),
+            None,
+        )
+        if fork:
+            lines.append(f"fork {fork.get('factor_id')} R{fork.get('round')} {fork.get('channel')}")
+        if skip:
+            lines.append(f"contrastive {skip.get('factor_id')} ATE={float(skip.get('ate', 0.0)):+.4f}")
+        return "\n".join(lines)
+
 
 def _dump_effects(effects: list[EffectEstimate]) -> list[dict[str, Any]]:
     return [asdict(e) for e in effects]
+
+
+def _fork_entry(patch: str, factor_id: str, fork: dict[str, Any] | None) -> dict[str, Any]:
+    payload = dict(fork or {})
+    payload["patch"] = patch
+    payload["factor_id"] = factor_id
+    return payload
+
+
+def _split_ate(item: dict[str, Any], key: str) -> float:
+    split = item.get("extras", {}).get("split") or {}
+    return float((split.get(key) or {}).get("ate") or 0.0)
 
 
 def _findings(report: CausalMRIReport) -> list[str]:
@@ -68,8 +116,27 @@ def _findings(report: CausalMRIReport) -> list[str]:
         lines.append("Identity twin failed — later ATEs are not CRN-identified.")
     split = report.split_y or {}
     protest = float(split.get("protest_authorship", report.factual_y) or 0.0)
+    potential = float(split.get("authorship_escalation_potential", 0.0) or 0.0)
     ppd = float(split.get("public_private_divergence_mean", 0.0) or 0.0)
     comply = float(split.get("post_r52_compliance", 0.0) or 0.0)
+    trust_logged = float(split.get("trust_pi_logged", 0.0) or 0.0)
+    trust_path = float(split.get("trust_pi_path_mean", 0.0) or 0.0)
+    if trust_logged <= 0.061 and trust_path <= 0.10:
+        lines.append(
+            f"Trust channel is pinned near the recovery floor "
+            f"(logged={trust_logged:.3f}, path_mean={trust_path:.3f}); "
+            "ATEs on trust_pi_logged are not identified."
+        )
+    elif trust_path > 0.12:
+        lines.append(
+            f"Trust path-mean ({trust_path:.3f}) is above the floor — "
+            "do(M)/skip can move the private relationship channel."
+        )
+    if protest < 0.05 and potential > 0.08:
+        lines.append(
+            f"Public protest ({protest:.3f}) is action-gated; latent authorship potential "
+            f"({potential:.3f}) is the live MRI channel."
+        )
     if ppd > 0.15 and protest < 0.05:
         lines.append(
             f"Split-Y: private divergence ({ppd:.3f}) is large while public protest ({protest:.3f}) stays compressed — "
@@ -86,7 +153,13 @@ def _findings(report: CausalMRIReport) -> list[str]:
         )
     irf = report.memory_irf or []
     if len(irf) >= 2:
-        ranked = sorted(irf, key=lambda item: abs(float(item.get("ate", 0.0))))
+        ranked = sorted(
+            irf,
+            key=lambda item: max(
+                abs(float(item.get("ate", 0.0))),
+                abs(_split_ate(item, "authorship_escalation_potential")),
+            ),
+        )
         early = irf[0]
         late = irf[-1]
         if abs(float(late.get("ate", 0.0))) < abs(float(early.get("ate", 0.0))) * 0.5:
@@ -97,6 +170,33 @@ def _findings(report: CausalMRIReport) -> list[str]:
         lines.append(
             f"Largest memory-IRF move: {best.get('factor_id')} ATE={float(best.get('ate', 0.0)):+.4f}."
         )
+        for item in irf:
+            d_pub = _split_ate(item, "protest_authorship")
+            d_pot = _split_ate(item, "authorship_escalation_potential")
+            d_ppd = _split_ate(item, "public_private_divergence_mean")
+            d_comply = _split_ate(item, "post_r52_compliance")
+            if abs(d_pot) > abs(d_pub) + 0.01:
+                lines.append(
+                    f"IRF {item.get('factor_id')}: latent potential Δ={d_pot:+.3f} moves while "
+                    f"public protest Δ={d_pub:+.3f} stays compressed."
+                )
+                break
+            if abs(d_ppd) > abs(d_pub) + 0.02 and abs(d_ppd) > abs(d_comply) + 0.02:
+                lines.append(
+                    f"IRF {item.get('factor_id')}: private PPD Δ={d_ppd:+.3f} moves more than "
+                    f"public protest Δ={d_pub:+.3f} / R52 comply Δ={d_comply:+.3f}."
+                )
+                break
+    for fork in report.forks or []:
+        if fork.get("patch") == "identity":
+            continue
+        if fork.get("identical"):
+            continue
+        lines.append(
+            f"Fork: {fork.get('factor_id')} first leaves the factual transcript at "
+            f"R{fork.get('round')} ({fork.get('agent')}) on the {fork.get('channel')} channel."
+        )
+        break
     worlds = report.three_worlds or {}
     if worlds.get("hypocrisy_index") is not None and abs(float(worlds.get("hypocrisy_index") or 0.0)) > 0.02:
         lines.append(
@@ -130,7 +230,7 @@ class CausalDecompiler:
         blame_event_ids: list[str] | None = None,
         blame_limit: int | None = None,
         include_toy_shapley: bool = True,
-        auto_battery: bool = False,
+        auto_battery: bool = True,
         include_story_shapley: bool | None = None,
         include_three_worlds: bool | None = None,
         include_lambda: bool = False,
@@ -183,7 +283,7 @@ class CausalDecompiler:
             "Abduction is event-keyed NoiseLog, not a global PRNG queue.",
             "LLM outputs are record-replayed from the factual prompt cache.",
             "Memory IRF is an interventional analogue, not a natural indirect effect.",
-            "Contrastive skip lies on AND causes; Shapley on the planted SCM is the oracle.",
+            "Contrastive skip lies on AND causes (E003 × E052); Shapley on the planted SCM is the oracle.",
             "Split-Y is the paper estimand: public compliance and private divergence are not the same Y.",
         ]
         report = CausalMRIReport(
@@ -192,6 +292,7 @@ class CausalDecompiler:
             split_y=split_y(factual),
             identity_twin_ok=identity_holds(factual, twin0),
             notes=notes,
+            forks=[_fork_entry("identity", "NOOP", first_divergence(factual, twin0))],
         )
         if not report.identity_twin_ok:
             report.notes.append("FAIL: no-op twin diverged from factual run.")
@@ -202,11 +303,13 @@ class CausalDecompiler:
         for op in extra_ops or []:
             twin = run_twin(config, [op], llm_trace=factual.llm_cache)
             effect = paired_effect(factual, twin, outcome, name=op.kind, factor_id=op.factor_id())
+            effect.extras["fork"] = first_divergence(factual, twin)
             report.total_effects.append(asdict(effect))
             report.split_effects.append({
                 "factor_id": op.factor_id(),
                 "split": {k: asdict(v) for k, v in paired_split_effects(factual, twin, name=op.kind, factor_id=op.factor_id()).items()},
             })
+            report.forks.append(_fork_entry(op.kind, op.factor_id(), effect.extras["fork"]))
 
         if memory_rounds is None and auto_battery:
             memory_rounds = default_memory_irf_rounds(factual)
@@ -214,11 +317,13 @@ class CausalDecompiler:
             report.memory_irf = _dump_effects(
                 memory_irf(config, factual, outcome, memory_rounds)
             )
+            for item in report.memory_irf:
+                report.forks.append(_fork_entry("memory_irf", str(item.get("factor_id")), (item.get("extras") or {}).get("fork")))
 
         event_ids = blame_event_ids
         if event_ids is None:
             if auto_battery:
-                event_ids = beat_event_ids(factual, limit=3 if blame_limit is None else max(0, int(blame_limit) or 3))
+                event_ids = and_event_ids(factual)
             else:
                 limit = 3 if blame_limit is None else max(0, int(blame_limit))
                 event_ids = [e["event_id"] for e in factual.events[:limit]]
@@ -227,43 +332,28 @@ class CausalDecompiler:
             report.contrastive = _dump_effects(contrastive)
             locus = point_of_commitment(contrastive)
             report.point_of_commitment = asdict(locus) if locus else None
+            for item in report.contrastive:
+                report.forks.append(_fork_entry("skip", str(item.get("factor_id")), (item.get("extras") or {}).get("fork")))
 
         want_shapley = include_story_shapley if include_story_shapley is not None else auto_battery
         if want_shapley:
-            shapley_ids = beat_event_ids(factual, limit=2)
-            report.story_shapley = story_shapley(config, factual, shapley_ids, outcome)
+            report.story_shapley = story_shapley(config, factual, and_event_ids(factual), outcome)
 
         want_worlds = include_three_worlds if include_three_worlds is not None else auto_battery
         if want_worlds:
-            op = None
-            if extra_ops:
-                op = extra_ops[0]
-            elif report.memory_irf:
-                from src.engine.causal.algebra import delete_memory as _delete
-                from src.engine.story_cast import story_cast_from_log
-
-                factor = str(report.memory_irf[0].get("factor_id") or "")
-                rnd = 0
-                for part in factor.split(":"):
-                    if part.startswith("r") and part[1:].isdigit():
-                        rnd = int(part[1:])
-                        break
-                if rnd:
-                    op = _delete(rnd, story_cast_from_log(factual).idea)
-            elif factual.events:
-                from src.engine.causal.algebra import skip_event as _skip
-
-                ev = factual.events[0]
-                op = _skip(int(ev.get("round") or 1), str(ev.get("event_id")))
+            op = draft_beat_op(factual)
             if op is not None:
                 report.three_worlds = three_worlds(config, factual, op, outcome)
+                report.forks.append(
+                    _fork_entry("three_worlds", op.factor_id(), report.three_worlds.get("fork_w1"))
+                )
 
         if include_lambda:
             report.lambda_effects = _dump_effects(lambda_lesion_effects(config, factual, outcome))
 
         if include_toy_shapley:
             factors = planted_factors()
-            report.shapley_toy = exact_shapley(lambda s: coalition_value(s), factors)
+            report.shapley_toy = exact_shapley(planted_outcome, factors)
             report.contrastive_toy_lie = contrastive_leave_one_out(factors, factors)
             report.notes.append(
                 "Planted AND: factual knockout credits 1+1 (overcount); Shapley splits 0.5/0.5/0."

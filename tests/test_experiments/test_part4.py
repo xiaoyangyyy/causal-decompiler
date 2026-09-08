@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.engine.intervention import load_interventions
 from src.engine.simulation import SimConfig, run_simulation
-from src.experiments.aggregate import aggregate_experiment
-from src.experiments.batch import run_batch
-from src.experiments.conditions import EXPERIMENT_MATRIX, build_sim_config, get_condition, list_conditions
-from src.experiments.exp_validity import shuffle_vs_full_test
-from src.experiments.metrics import compute_run_metrics, mediation_fraction
+from src.experiments.conditions import EXPERIMENT_MATRIX, build_sim_config, get_condition
+from src.experiments.metrics import compute_run_metrics
+from src.experiments.paper_contrasts import run_crn_pair, shuffle_vs_full_test
 from src.experiments.report import generate_report, generate_report_from_log
 from src.experiments.runner import run_single
 
@@ -18,7 +14,7 @@ from src.experiments.runner import run_single
 class TestConditions:
     def test_matrix_size(self):
         total = sum(len(v) for v in EXPERIMENT_MATRIX.values())
-        assert total == 21  # 5+4+3+3+6
+        assert total == 19  # 5+4+3+3+4
 
     def test_build_config_tags(self):
         cond = get_condition("A", "A2")
@@ -78,65 +74,17 @@ class TestMetricsAndReport:
         assert path.exists()
 
 
-class TestBatchAndAggregate:
-    def test_mini_batch(self, tmp_path):
-        rows = run_batch("A", seeds=2, condition_ids=["A1", "A2"], parallel=1, output_dir=tmp_path, max_rounds=10)
-        assert len(rows) == 4
-        summary = tmp_path / "batch_A_summary.json"
-        assert summary.exists()
-        assert "authorship_escalation_score" in rows[0]
+class TestCRNContrasts:
+    def test_honor_pair_records_split_y(self):
+        row = run_crn_pair("A", "A1", "A2", seed=0, max_rounds=8)
+        assert row["control_id"] == "A1"
+        assert "public_private_divergence_mean" in row["ates"]
+        assert "ate" in row["ates"]["protest_authorship"]
 
-    def test_aggregate_from_batch(self, tmp_path):
-        run_batch("A", seeds=3, condition_ids=["A1", "A2"], output_dir=tmp_path, max_rounds=10)
-        agg = aggregate_experiment("A", batch_path=tmp_path / "batch_A_summary.json")
-        assert "A1" in agg["conditions"]
-        assert "A2" in agg["conditions"]
-        assert agg["outcome"] == "authorship_escalation_score"
-
-    def test_batch_rows_include_experiment_specific_outcomes(self, tmp_path):
-        from src.experiments.batch import ANALYSIS_OUTCOMES
-
-        for key in (
-            "help_rebuttal", "trust_phd_b_r60", "trust_recovery_rate",
-            "interpretation_of_E030", "public_private_divergence_mean", "trust_pi_logged",
-        ):
-            assert key in ANALYSIS_OUTCOMES
-        rows = run_batch("A", seeds=1, condition_ids=["A1"], output_dir=tmp_path, max_rounds=8)
-        assert "interpretation_of_E030" in rows[0]
-        assert "trust_phd_b_r60" in rows[0]
-        assert "public_private_divergence_mean" in rows[0]
-
-    def test_skip_existing_rebuilds_row_without_rerun(self, tmp_path):
-        from src.experiments.batch import run_batch
-
-        jsonl = tmp_path / "run_AA1_seed0.jsonl"
-        jsonl.write_text(
-            "\n".join([
-                '{"type":"run_meta","run_id":"AA1_seed0","config":{"experiment_id":"A","condition_id":"A1","seed":0},"started_at":"t"}',
-                '{"type":"round","round":1,"event_id":"E001","metrics":{"trust_phd_a_pi":0.61,"public_private_divergence":0.5},"agent_deltas":{}}',
-                '{"type":"round","round":60,"event_id":"E060","metrics":{"trust_phd_a_pi":0.58,"public_private_divergence":0.4},"agent_deltas":{}}',
-                '{"type":"outcomes","protest_authorship":0.02,"trust_pi_final":0.0}',
-            ]),
-            encoding="utf-8",
-        )
-        rows = run_batch("A", seed_list=[0], condition_ids=["A1"], output_dir=tmp_path, skip_existing=True)
-        assert len(rows) == 1
-        assert rows[0]["skipped_existing"] is True
-        assert rows[0]["trust_pi_final"] == 0.58
-        assert rows[0]["public_private_divergence_last"] == 0.4
-
-    def test_aggregate_uses_experiment_primary_outcome(self, tmp_path):
-        summary = tmp_path / "batch_C_summary.json"
-        summary.write_text(
-            """[
-              {"experiment_id":"C","condition_id":"C1","seed":0,"trust_phd_b_r60":0.4,"trust_recovery_rate":0.2,"protest_authorship":0.01},
-              {"experiment_id":"C","condition_id":"C3","seed":0,"trust_phd_b_r60":0.7,"trust_recovery_rate":0.0,"protest_authorship":0.01}
-            ]""",
-            encoding="utf-8",
-        )
-        agg = aggregate_experiment("C", batch_path=summary)
-        assert agg["outcome"] == "trust_phd_b_r60"
-        assert agg["conditions"]["C3"]["mean"] == 0.7
+    def test_shuffle_vs_full_is_crn(self):
+        gate = shuffle_vs_full_test([0], max_rounds=8)
+        assert gate["n_seeds"] == 1
+        assert "ate_mean" in gate
 
     def test_new_outcomes_present(self):
         result = run_single("A", seed=6, condition_id="A2", max_rounds=55)
@@ -159,10 +107,3 @@ class TestInterventionsLoaded:
         ):
             assert required in ids
 
-
-class TestMediation:
-    def test_mediation_fraction_bounded(self):
-        ctrl = run_single("V", 0, "V1", max_rounds=10)["log"]
-        treat = run_single("V", 0, "V6", max_rounds=10)["log"]
-        med = mediation_fraction([ctrl], [treat])
-        assert 0.0 <= med["mediation_fraction"] <= 1.0

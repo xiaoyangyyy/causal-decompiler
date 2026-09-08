@@ -147,3 +147,24 @@ def run_paper_contrasts(
     for block in by_exp.values():
         table_rows.extend(block.get("table_rows") or [])
     return {"experiments": by_exp, "table_rows": table_rows}
+
+
+def shuffle_vs_full_test(
+    seeds: list[int],
+    outcome: str = "protest_authorship",
+    *,
+    max_rounds: int = 60,
+) -> dict[str, Any]:
+    """CRN validity gate: V6 (full memory) vs V2 (shuffled) on shared LLM traces."""
+    ates: list[float] = []
+    for seed in seeds:
+        row = run_crn_pair("V", "V6", "V2", seed, max_rounds=max_rounds)
+        ates.append(float(row["ates"][outcome]["ate"]))
+    mean_ate = sum(ates) / len(ates) if ates else 0.0
+    return {
+        "outcome": outcome,
+        "n_seeds": len(seeds),
+        "ate_mean": mean_ate,
+        "ates": ates,
+        "passes_nonzero_shift": any(abs(v) > 1e-9 for v in ates),
+    }

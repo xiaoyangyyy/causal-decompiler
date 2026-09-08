@@ -5,11 +5,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from src.engine.run_log import RunLog, extract_outcome, _memory_cluster_strength
+from src.engine.run_log import RunLog
 from src.engine.story_cast import story_cast_from_log
-from src.cognition.power import career_hostage_index, pi_control_surface
-from src.experiments.social_metrics import compute_social_emergence_metrics
-
 
 SNAPSHOT_ROUNDS = (1, 20, 40, 60)
 
@@ -45,7 +42,6 @@ def compute_run_metrics(log: RunLog) -> dict[str, Any]:
         "critic_audit_metrics": _critic_audit_metrics(log),
         "power_surface_final": _power_surface_from_log(log),
         "path_level_causal_chain": _path_level_causal_chain(log, agent_id=idea),
-        "social_emergence_metrics": compute_social_emergence_metrics(log),
     }
 
 
@@ -541,64 +537,3 @@ def _power_surface_from_log(log: RunLog) -> dict[str, float]:
         "trust_pi_final": float(log.outcomes.get("trust_pi_final", 0.0)),
         "authorship_dispute_index": float(last.get("authorship_dispute_index", 0.0)),
     }
-def mediation_fraction(
-    control_logs: list[RunLog],
-    treatment_logs: list[RunLog],
-    outcome: str = "protest_authorship",
-    mediator: str = "memory_authorship_cluster_strength",
-) -> dict[str, float]:
-    """Simple mediation decomposition: total effect vs mediator-adjusted proxy."""
-    if not control_logs or not treatment_logs:
-        return {"total_effect": 0.0, "mediator_delta": 0.0, "mediation_fraction": 0.0}
-
-    y_c = sum(extract_outcome(l, outcome) for l in control_logs) / len(control_logs)
-    y_t = sum(extract_outcome(l, outcome) for l in treatment_logs) / len(treatment_logs)
-    m_c = sum(
-        l.outcomes.get(mediator, _memory_cluster_strength(l, story_cast_from_log(l).idea))
-        for l in control_logs
-    ) / len(control_logs)
-    m_t = sum(
-        l.outcomes.get(mediator, _memory_cluster_strength(l, story_cast_from_log(l).idea))
-        for l in treatment_logs
-    ) / len(treatment_logs)
-
-    total = y_t - y_c
-    m_delta = m_t - m_c
-    frac = abs(m_delta / total) if abs(total) > 1e-9 else 0.0
-    note = ""
-    if abs(m_delta) > abs(total) * 2 and abs(total) < 0.05:
-        note = "cluster moved much more than Y; do not treat |ΔM/ΔY| as mediation"
-    return {
-        "total_effect": total,
-        "mediator_delta": m_delta,
-        "mediation_fraction": min(1.0, frac),
-        "note": note,
-    }
-
-
-def bootstrap_ci(values: list[float], n_boot: int = 500, alpha: float = 0.05, seed: int = 0) -> tuple[float, float, float]:
-    """Bootstrap mean CI for a list of scalar outcomes."""
-    if not values:
-        return 0.0, 0.0, 0.0
-    import random
-
-    rng = random.Random(seed)
-    n = len(values)
-    means: list[float] = []
-    for _ in range(n_boot):
-        sample = [values[rng.randrange(n)] for _ in range(n)]
-        means.append(sum(sample) / n)
-    means.sort()
-    lo = means[int((alpha / 2) * n_boot)]
-    hi = means[int((1 - alpha / 2) * n_boot) - 1]
-    return sum(values) / n, lo, hi
-
-
-def welch_t_stat(a: list[float], b: list[float]) -> float:
-    if len(a) < 2 or len(b) < 2:
-        return 0.0
-    ma, mb = sum(a) / len(a), sum(b) / len(b)
-    va = sum((x - ma) ** 2 for x in a) / (len(a) - 1)
-    vb = sum((x - mb) ** 2 for x in b) / (len(b) - 1)
-    denom = math.sqrt(va / len(a) + vb / len(b))
-    return (ma - mb) / denom if denom > 1e-12 else 0.0

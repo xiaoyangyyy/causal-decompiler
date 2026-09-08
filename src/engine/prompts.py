@@ -1,4 +1,4 @@
-﻿"""LLM prompt builders for Role Policy and Memory agents."""
+"""LLM prompt builders for Role Policy and Memory agents."""
 
 from __future__ import annotations
 
@@ -19,7 +19,8 @@ Rules:
 3. Do not override sampled_action.type; it was selected after continuous field scoring and LLM plausibility fusion.
 4. Use action_candidates only to explain motives and tradeoffs, not to choose a different action in this rendering step.
 5. Memory behavioral_hooks are soft context, not rules.
-6. Match public/private wording to the sampled action and motive mixture."""
+6. Match public/private wording to the sampled action and motive mixture.
+7. Prefer stance_prior.statement_type. Credit claims (ask_for_authorship, document_contribution, confront, challenge_claim) must not be rendered as team_support; use self_advocacy. team_support is for comply/support_teammate only."""
 
 
 
@@ -225,6 +226,7 @@ def build_role_policy_prompt(
     avoid_actions: list[str] | None = None,
     retry_note: str = "",
     validation_error: str = "",
+    stance_prior: dict[str, Any] | None = None,
 ) -> str:
     state = {
         "agent_id": agent.id,
@@ -261,6 +263,7 @@ def build_role_policy_prompt(
         "allowed_actions": allowed_actions,
         "action_candidates": action_candidates or [],
         "sampled_action": sampled_action or {},
+        "stance_prior": stance_prior or {},
         "retry_note": retry_note,
         "validation_error": validation_error,
         "output_schema": {

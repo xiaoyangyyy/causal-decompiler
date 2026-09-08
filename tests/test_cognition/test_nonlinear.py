@@ -6,6 +6,7 @@ import copy
 
 from src.cognition.belief import apply_action_belief_feedback
 from src.cognition.dynamics import (
+    action_escalation_impulse,
     authorship_memory_cluster,
     combine_escalation_score,
     escalation_potential_from_state,
@@ -48,6 +49,35 @@ class TestNonlinearDynamics:
         assert high > low
         assert high <= 1.0
         assert combine_escalation_score(high, 0.0) < high
+        assert combine_escalation_score(high, 0.0) > 0.0
+
+    def test_document_contribution_carries_soft_impulse(self):
+        assert action_escalation_impulse("document_contribution", 0.8) > 0.05
+        assert action_escalation_impulse("ask_for_authorship", 0.8) > action_escalation_impulse(
+            "document_contribution", 0.8,
+        )
+        assert action_escalation_impulse("write_section", 0.8) == 0.0
+
+    def test_cluster_gate_moves_in_observed_range(self):
+        shared = dict(
+            beliefs={"pi_fairness": 0.05},
+            emotion={"resentment": 0.70, "anger": 0.60},
+            promise_broken=0.83,
+        )
+        low = escalation_potential_from_state(shared["beliefs"], shared["emotion"], promise_broken=0.83, promise_cluster=1.0)
+        high = escalation_potential_from_state(shared["beliefs"], shared["emotion"], promise_broken=0.83, promise_cluster=6.4)
+        assert high > low + 0.02
+
+    def test_promise_and_draft_gate(self):
+        beliefs = {"pi_fairness": 0.05}
+        emotion = {"resentment": 0.70, "anger": 0.60}
+        draft_only = escalation_potential_from_state(
+            beliefs, emotion, promise_broken=0.9, promise_cluster=4.0, promise_anchor=0.0,
+        )
+        promise_and_draft = escalation_potential_from_state(
+            beliefs, emotion, promise_broken=0.9, promise_cluster=4.0, promise_anchor=0.85,
+        )
+        assert promise_and_draft > draft_only + 0.08
 
     def test_action_feedback_moves_beliefs(self):
         world = load_world()

@@ -197,13 +197,6 @@ A strong framing is:
 
 1. LabWars is a long-horizon Agent MRI environment for academic-organization conflict.
 2. It separates Social Physics from LLM cognitive scoring through a dual-engine policy.
-3. It uses memory, hierarchy, credit visibility, false evidence, and policy-mode ablations to decompile agent social behavior.
+3. It uses memory IRF, CRN contrasts, and optional λ lesions to decompile agent social behavior.
 
-## 9. Next engineering milestones
-
-- Keep CLI and LLM configuration reproducible across providers.
-- Use Social Potential Field as the v0.2 core theory object.
-- Formalize Agent Social State `z_i(t)` and the organization-level ablation matrix.
-- Add explicit pressure-field decomposition to selected actions.
-- Add hierarchical academic society configs.
-- Upgrade generated reports from trajectory summaries to mechanism decompilation reports.
+The conference experiment is the Causal Decompiler protocol in [`docs/18-Causal-Decompiler-Paper-Protocol.md`](18-Causal-Decompiler-Paper-Protocol.md): MRI of one frozen 14-agent / 60-round trajectory.

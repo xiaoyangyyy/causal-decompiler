@@ -8,10 +8,11 @@ Most LLM-agent papers report "treatment X changed success rate." LabWars reports
 
 1. **Identity twin.** A no-op counterfactual must reproduce the factual actions. If this fails, later ATEs are theatre.
 2. **Split-Y.** Public protest can sit at 0.03 while private divergence is 0.5. Same `do()`, two transcripts.
-3. **Memory IRF.** Deleting the same cluster at t=3 vs t=45 vs t=52 is an interventional curve, not a mediation fraction `|ΔM/ΔY|`.
-4. **AND-cause lie.** Skipping "promise" and skipping "draft" each look decisive; Shapley splits them. The planted SCM (Y = promise AND draft) is the oracle: knockout sums to 2, Shapley sums to 1.
+3. **Memory IRF.** Deleting the same cluster at t=3 vs t=45 vs t=52 is an interventional curve of **public protest vs private PPD**, not a mediation fraction `|ΔM/ΔY|`.
+4. **AND-cause lie.** Skipping E003 (promise) and skipping E052 (draft) each look decisive; Shapley splits them. The planted SCM (Y = promise AND draft) is the oracle: knockout sums to 2, Shapley sums to 1.
+5. **Fork moment.** After a patch, the first round where action / public stance / private intent leaves the factual transcript.
 
-Three-worlds adds the social-gating channel: W0 factual, W1 `do(op)`, W2 `do(op)` + omniscient observation. If private divergence moves and public compliance does not, the effect lived in the hidden transcript.
+Three-worlds is pinned to the draft beat (E052 / R52): W0 factual, W1 `do(skip draft)`, W2 `do(skip draft)` + omniscient observation. If private divergence moves and public compliance does not, the effect lived in the hidden transcript.
 
 ## 2. Commands
 
@@ -21,24 +22,30 @@ Scripted smoke (no API):
 python -m src.experiments paper --rounds 8 --seed 11 --llm-provider scripted
 ```
 
-Full 60-round MRI after a persisted DeepSeek factual run (replays the LLM sidecar, does not re-pay for the factual world):
+`--sampled-top-k` defaults to 1. DeepSeek config sets `thinking: disabled`.
+
+Full 60-round MRI after a persisted factual run (replays the LLM sidecar; twins re-derive keyed noise from the seed, they do not inject persisted draws):
 
 ```bash
 python -m src.experiments paper --from-jsonl output/runs/run_XXXX.jsonl --full-cast
 ```
 
-A/B/C/D as CRN twins of one control, not independent seeds:
+A/B/C/D as CRN twins of one control:
 
 ```bash
-python -m src.experiments paper --rounds 60 --full-cast --contrasts A --llm-provider scripted
+python -m src.experiments paper --rounds 60 --full-cast --contrasts A --contrast-seeds 0,1,2 --llm-provider scripted
 ```
 
-Experiment-level wrappers:
+Library surface — one MRI entry, optional CRN pairs:
 
 ```python
-from src.experiments.exp_a_promise import run_paper
-from src.experiments.exp_c_false_memory import run_paper as run_c
+from src.experiments import run_paper_protocol, run_paper_contrasts, run_crn_pair
+
+run_paper_protocol(cfg)                 # identity, split-Y, IRF, Shapley, three-worlds
+run_paper_protocol(cfg, contrasts=["A"])  # plus experiment-A CRN twins
 ```
+
+CLI `decompile` is an alias of `paper`.
 
 ## 3. Tables the protocol writes
 
@@ -46,16 +53,17 @@ from src.experiments.exp_c_false_memory import run_paper as run_c
 |---|---|
 | Identity twin | CRN + LLM replay hits/misses |
 | Split-Y | protest, PPD, R52 comply, cluster, promise broken/honored, trust logged |
-| Memory IRF | ATE of `do_memory(t)` over story beats |
-| Shapley vs skip | planted oracle + budgeted story events |
-| Three worlds | total / omniscient / gated channel / hypocrisy index |
+| Memory IRF | Δ protest / Δ PPD / Δ R52 comply over delete-time |
+| Fork moment | first round+channel where the twin leaves the factual transcript |
+| Shapley vs skip | planted oracle + E003 × E052 |
+| Three worlds | skip draft beat; total / omniscient / gated / hypocrisy |
 | CRN contrasts | A1→A2 honor, A1→A5 delete, C3→C2 false memory, … |
 
 Outputs: `output/reports/paper_protocol_{run_id}.md` and `.json`.
 
 ## 4. What not to run for the paper
 
-The 19×60 DeepSeek matrix is a cost accident. Do not treat it as Causal MRI. Validity still needs shuffled vs full memory, but as a CRN pair (`V6→V2`), not as a separate unpaid-for grid.
+The 19×60 independent-seed DeepSeek matrix is a cost accident and is no longer in the repo. Do not recreate it. Validity is the CRN pair `V6→V2`.
 
 ## 5. Identification caveats (write these in the paper)
 

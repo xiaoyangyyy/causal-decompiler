@@ -14,14 +14,16 @@ from itertools import combinations
 from typing import Any
 
 from src.engine.causal.algebra import CausalOp, delete_memory, lesion, skip_event
+from src.engine.causal.toy import shapley_weight
 from src.engine.causal.twin import run_twin
 from src.engine.run_log import SPLIT_Y_KEYS, RunLog, extract_outcome
 from src.engine.simulation import SimConfig
 from src.engine.story_cast import story_cast_from_log
 
-BEAT_EVENT_IDS = ("E003", "E030", "E052", "E031", "E035", "E047")
+AND_EVENT_IDS = ("E003", "E052")
 PAPER_SPLIT_KEYS = (
     "protest_authorship",
+    "authorship_escalation_potential",
     "public_private_divergence_mean",
     "post_r52_compliance",
     "authority_compliance",
@@ -29,6 +31,7 @@ PAPER_SPLIT_KEYS = (
     "promise_broken_strength_r52",
     "promise_honored_strength_r52",
     "trust_pi_logged",
+    "trust_pi_path_mean",
     "pi_fairness_r52",
 )
 
@@ -74,6 +77,7 @@ def memory_irf(
             key: {"ate": extract_outcome(twin, key) - extract_outcome(factual, key), "twin_y": extract_outcome(twin, key)}
             for key in PAPER_SPLIT_KEYS
         }
+        est.extras["fork"] = first_divergence(factual, twin)
         estimates.append(est)
     return estimates
 
@@ -92,11 +96,11 @@ def contrastive_event_effects(
             continue
         op = skip_event(int(rec["round"]), event_id)
         twin = run_twin(base, [op], llm_trace=factual.llm_cache)
-        estimates.append(
-            paired_effect(
-                factual, twin, outcome, name=f"skip[{event_id}]", factor_id=op.factor_id(),
-            )
+        est = paired_effect(
+            factual, twin, outcome, name=f"skip[{event_id}]", factor_id=op.factor_id(),
         )
+        est.extras["fork"] = first_divergence(factual, twin)
+        estimates.append(est)
     return estimates
 
 
@@ -145,17 +149,106 @@ def default_memory_irf_rounds(log: RunLog) -> list[int]:
     return out
 
 
-def beat_event_ids(log: RunLog, *, limit: int = 3) -> list[str]:
-    present = {e.get("event_id") for e in log.events}
-    ids = [eid for eid in BEAT_EVENT_IDS if eid in present]
-    if len(ids) < 2:
-        for ev in log.events:
-            eid = ev.get("event_id")
-            if eid and eid not in ids:
-                ids.append(str(eid))
-            if len(ids) >= limit:
-                break
-    return ids[:limit]
+def and_event_ids(log: RunLog) -> list[str]:
+    """Promise ∧ draft (E003 × E052). Short runs fall back to first+last events."""
+    present = {str(e.get("event_id")) for e in log.events if e.get("event_id")}
+    ids = [eid for eid in AND_EVENT_IDS if eid in present]
+    if len(ids) == 2:
+        return ids
+    ordered = [str(e.get("event_id")) for e in log.events if e.get("event_id")]
+    if len(ids) == 1:
+        other = next((eid for eid in reversed(ordered) if eid != ids[0]), None)
+        return ids + ([other] if other else [])
+    if len(ordered) >= 2:
+        return [ordered[0], ordered[-1]]
+    return ordered
+
+
+def draft_beat_op(log: RunLog) -> CausalOp | None:
+    """Skip the authorship draft beat (E052 / R52). Short runs skip the last event."""
+    by_id = {str(e.get("event_id")): e for e in log.events if e.get("event_id")}
+    if "E052" in by_id:
+        rec = by_id["E052"]
+        return skip_event(int(rec["round"]), "E052")
+    cast = story_cast_from_log(log)
+    for rec in log.events:
+        if int(rec.get("round") or 0) == int(cast.draft_round):
+            return skip_event(int(rec["round"]), str(rec.get("event_id")))
+    if log.events:
+        rec = log.events[-1]
+        eid = rec.get("event_id")
+        if eid:
+            return skip_event(int(rec.get("round") or 1), str(eid))
+    return None
+
+
+def _stance_key(payload: Any) -> tuple[str, ...]:
+    if not isinstance(payload, dict):
+        return (str(payload),)
+    return (
+        str(payload.get("statement_type") or ""),
+        str(payload.get("authorship_claim") or payload.get("goal") or ""),
+        str(payload.get("content_summary") or ""),
+    )
+
+
+def _action_index(log: RunLog) -> dict[tuple[int, str], dict[str, Any]]:
+    out: dict[tuple[int, str], dict[str, Any]] = {}
+    for act in log.actions:
+        key = (int(act.get("round") or 0), str(act.get("agent") or ""))
+        out[key] = act
+    return out
+
+
+def first_divergence(factual: RunLog, twin: RunLog) -> dict[str, Any]:
+    """First round the twin leaves the factual transcript.
+
+    Channel order: missing action, selected action type, public stance, private intent.
+    Identity twins should return identical=True.
+    """
+    fact = _action_index(factual)
+    other = _action_index(twin)
+    for key in sorted(set(fact) | set(other)):
+        rnd, agent = key
+        fa = fact.get(key)
+        ta = other.get(key)
+        if fa is None or ta is None:
+            return {
+                "identical": False,
+                "round": rnd,
+                "agent": agent,
+                "channel": "presence",
+                "factual": None if fa is None else str(fa.get("type")),
+                "twin": None if ta is None else str(ta.get("type")),
+            }
+        if str(fa.get("type")) != str(ta.get("type")):
+            return {
+                "identical": False,
+                "round": rnd,
+                "agent": agent,
+                "channel": "action",
+                "factual": str(fa.get("type")),
+                "twin": str(ta.get("type")),
+            }
+        if _stance_key(fa.get("public_position")) != _stance_key(ta.get("public_position")):
+            return {
+                "identical": False,
+                "round": rnd,
+                "agent": agent,
+                "channel": "public",
+                "factual": _stance_key(fa.get("public_position")),
+                "twin": _stance_key(ta.get("public_position")),
+            }
+        if _stance_key(fa.get("private_intent")) != _stance_key(ta.get("private_intent")):
+            return {
+                "identical": False,
+                "round": rnd,
+                "agent": agent,
+                "channel": "private",
+                "factual": _stance_key(fa.get("private_intent")),
+                "twin": _stance_key(ta.get("private_intent")),
+            }
+    return {"identical": True, "round": None, "agent": None, "channel": None, "factual": None, "twin": None}
 
 
 def _dump_split(effects: dict[str, EffectEstimate]) -> dict[str, dict[str, Any]]:
@@ -208,7 +301,7 @@ def story_shapley(
         for combo in combinations(factors, size):
             s = frozenset(combo)
             v_s = y_of(s)
-            weight = _shapley_weight(size, n)
+            weight = shapley_weight(size, n)
             for factor in factors:
                 if factor in s:
                     continue
@@ -232,12 +325,6 @@ def story_shapley(
         "interaction": interaction,
         "and_lie": abs(sum(contrastive.values())) > abs(y_full - y_empty) + 1e-9,
     }
-
-
-def _shapley_weight(size: int, n: int) -> float:
-    from math import factorial
-
-    return factorial(size) * factorial(n - size - 1) / factorial(n)
 
 
 def three_worlds(
@@ -278,6 +365,7 @@ def three_worlds(
             "w2": {k: split2.get(k, 0.0) for k in split_keys},
         },
         "hypocrisy_index": abs(ppd1 - ppd0) - abs(public1 - public0),
+        "fork_w1": first_divergence(factual, w1),
         "identity_w1_ok": True,
         "run_ids": {"w1": w1.run_id, "w2": w2.run_id},
     }

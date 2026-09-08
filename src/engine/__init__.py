@@ -1,6 +1,6 @@
 """LabWars simulation engine."""
 
-from .causal import CausalDecompiler, CausalMRIReport, CausalResult, compute_ate, run_causal_experiment
+from .causal import CausalDecompiler, CausalMRIReport
 from .critic import CriticAgent, Violation
 from .event_agent import EventAgent, is_agent_active
 from .intervention import Intervention, get_active_interventions, load_interventions
@@ -13,7 +13,6 @@ from .simulation import SimConfig, load_mvp_config, run_simulation
 __all__ = [
     "CausalDecompiler",
     "CausalMRIReport",
-    "CausalResult",
     "CriticAgent",
     "EventAgent",
     "Intervention",
@@ -24,7 +23,6 @@ __all__ = [
     "RunLog",
     "SimConfig",
     "Violation",
-    "compute_ate",
     "extract_outcome",
     "get_active_interventions",
     "get_adapter",
@@ -32,6 +30,5 @@ __all__ = [
     "load_interventions",
     "load_llm_config",
     "load_mvp_config",
-    "run_causal_experiment",
     "run_simulation",
 ]

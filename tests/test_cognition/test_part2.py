@@ -184,6 +184,28 @@ class TestDivergence:
         div_aligned = compute_divergence(agent)
         assert div > div_aligned
 
+    def test_action_strategy_tokens_are_not_neutral(self, world):
+        from src.cognition.divergence import divergence_from_action
+
+        public = {"statement_type": "team_support", "authorship_claim": "any_authorship"}
+        low = divergence_from_action({
+            "type": "lay_low",
+            "public_position": public,
+            "private_intent": {"goal": "lay_low", "strategy": "lay_low"},
+        })
+        high = divergence_from_action({
+            "type": "ask_for_authorship",
+            "public_position": public,
+            "private_intent": {"goal": "ask_for_authorship", "strategy": "ask_for_authorship"},
+        })
+        assert high > low + 0.15
+
+    def test_ambiguity_writes_signal_not_broken_promise(self, world, events, llm_adapter):
+        event = events["E030"]
+        mem = write_memory(world.agents["phd_a"], event, event.round, llm_adapter=llm_adapter)
+        assert mem is not None
+        assert mem.content_type == "authorship_signal"
+
     def test_credit_dispute_increases_mean_divergence(self, world, events):
         w = _clone_world(world)
         before = process_event_phase(w, events["E018"]).metrics["public_private_divergence"]

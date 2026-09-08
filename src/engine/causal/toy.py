@@ -6,6 +6,7 @@ real causes (the AND lie). Shapley splits the total effect 0.5 / 0.5 / 0.
 
 from __future__ import annotations
 
+from math import factorial
 from itertools import combinations
 from typing import Callable, Iterable
 
@@ -21,8 +22,8 @@ def planted_outcome(active: Iterable[str]) -> float:
     return 1.0 if "promise" in present and "draft" in present else 0.0
 
 
-def coalition_value(coalition: Iterable[str]) -> float:
-    return planted_outcome(coalition)
+def shapley_weight(size: int, n: int) -> float:
+    return factorial(size) * factorial(n - size - 1) / factorial(n)
 
 
 def exact_shapley(value_fn: Callable[[Iterable[str]], float], factors: tuple[Factor, ...]) -> dict[str, float]:
@@ -38,14 +39,8 @@ def exact_shapley(value_fn: Callable[[Iterable[str]], float], factors: tuple[Fac
                 if factor in s:
                     continue
                 v_si = value_fn(s | {factor})
-                phi[factor] += _shapley_weight(size, n) * (v_si - v_s)
+                phi[factor] += shapley_weight(size, n) * (v_si - v_s)
     return phi
-
-
-def _shapley_weight(size: int, n: int) -> float:
-    from math import factorial
-
-    return factorial(size) * factorial(n - size - 1) / factorial(n)
 
 
 def contrastive_leave_one_out(factual: Iterable[str], factors: tuple[Factor, ...]) -> dict[str, float]:

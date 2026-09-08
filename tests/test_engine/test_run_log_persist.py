@@ -29,6 +29,8 @@ def test_jsonl_roundtrip_restores_events_noise_and_llm_trace(tmp_path):
     loaded = RunLog.from_jsonl(path)
     assert load_factual(path).llm_cache.by_key["abc123"]["ok"] is True
     assert loaded.events[0]["event_id"] == "E001"
+    assert loaded.events[0]["type"] == "deadline"
+    assert loaded.actions[0]["type"] == "comply"
     assert loaded.noise_log[0]["value"] == 0.13
     assert loaded.interventions_applied[0]["intervention_id"] == "INT_AUTH_EXPLICIT"
     assert loaded.llm_cache is not None

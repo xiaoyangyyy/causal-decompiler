@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from src.engine.causal import CausalDecompiler, delete_memory, run_causal_experiment, run_factual, run_twin, skip_event
+from src.engine.causal import CausalDecompiler, delete_memory, run_factual, run_twin, skip_event
 from src.engine.causal.estimands import crn_aligned_draws, memory_irf
 from src.engine.causal.noise import STREAM_ACTION_JITTER, keyed_uniform
-from src.engine.causal.toy import coalition_value, contrastive_leave_one_out, exact_shapley, planted_factors
+from src.engine.causal.toy import contrastive_leave_one_out, exact_shapley, planted_factors, planted_outcome
 from src.engine.causal.twin import identity_holds
 from src.engine.simulation import SimConfig
 
@@ -25,7 +25,7 @@ def test_keyed_uniform_ignores_sibling_draw_count():
 
 def test_planted_and_shapley_splits_while_contrastive_overcounts():
     factors = planted_factors()
-    shapley = exact_shapley(lambda s: coalition_value(s), factors)
+    shapley = exact_shapley(planted_outcome, factors)
     knockout = contrastive_leave_one_out(factors, factors)
     assert shapley["promise"] == 0.5
     assert shapley["draft"] == 0.5
@@ -98,6 +98,9 @@ def test_decompiler_smoke_report():
     assert report.memory_irf
     assert report.shapley_toy["promise"] == 0.5
     assert report.contrastive_toy_lie["promise"] == 1.0
+    assert report.three_worlds.get("factor_id", "").startswith("EVENT_SKIP")
+    assert report.forks
+    assert report.forks[0]["patch"] == "identity"
 
 
 def test_llm_trace_replays_failures_without_recalling_inner():
@@ -125,11 +128,3 @@ def test_llm_trace_replays_failures_without_recalling_inner():
     assert inner.calls == 1
     assert adapter.trace.misses == 1
     assert adapter.trace.hits == 1
-
-
-def test_legacy_ate_import_still_works():
-    from src.engine.intervention import load_interventions
-
-    delete = next(i for i in load_interventions() if i.intervention_id == "INT_MEMORY_DELETE")
-    result = run_causal_experiment(_short_cfg(max_rounds=8), delete, n_seeds=1)
-    assert result.n_seeds == 1

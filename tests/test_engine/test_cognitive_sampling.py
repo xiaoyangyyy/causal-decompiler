@@ -9,13 +9,13 @@ def test_cognitive_sampling_marks_only_top_k_agents_for_llm():
     log = run_simulation(SimConfig(
         max_rounds=3,
         seed=4,
-        population_size=30,
+        mvp=False,
         llm_provider="scripted",
         policy_mode="dual_engine",
-        cognitive_sampling_top_k=5,
+        cognitive_sampling_top_k=1,
     ))
 
-    assert log.config["cognitive_sampling_top_k"] == 5
+    assert log.config["cognitive_sampling_top_k"] == 1
     sampled = [a for a in log.actions if (a.get("cognitive_sampling") or {}).get("sampled")]
     unsampled = [a for a in log.actions if (a.get("cognitive_sampling") or {}).get("enabled") and not (a.get("cognitive_sampling") or {}).get("sampled")]
     assert sampled

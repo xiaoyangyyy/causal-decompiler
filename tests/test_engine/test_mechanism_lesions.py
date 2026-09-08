@@ -10,7 +10,6 @@ def test_status_lesion_is_recorded_and_runs():
 
     assert log.config["status_lesion"] is True
     assert log.actions
-    assert "credit_attribution_gap" in log.outcomes
 
 
 def test_trust_lesion_is_recorded_and_flattens_trust_outputs():

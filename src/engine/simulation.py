@@ -36,7 +36,6 @@ from src.world.actions import ActionType, apply_project_effects
 from src.world.loader import PROJECT_ROOT, load_world
 from src.world.models import AgentRole, ProjectMetrics, WorldState
 from src.world.organization import authority_ids, resolve_event_cast
-from src.world.population import PopulationSpec, equalize_population, expand_population
 
 CONFIG_DIR = PROJECT_ROOT / "config"
 
@@ -68,11 +67,8 @@ class SimConfig:
     status_lesion: bool = False
     trust_lesion: bool = False
     observation_lesion: bool = False
-    population_size: int | None = None
-    population_labs: int | None = None
     cognitive_sampling_top_k: int | None = None
     cognitive_sampling_threshold: float = 0.0
-    egalitarian_initialization: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         llm_cfg = load_llm_config()
@@ -96,13 +92,11 @@ class SimConfig:
             "status_lesion": self.status_lesion,
             "trust_lesion": self.trust_lesion,
             "observation_lesion": self.observation_lesion,
-            "population_size": self.population_size,
-            "population_labs": self.population_labs,
             "cognitive_sampling_top_k": self.cognitive_sampling_top_k,
             "cognitive_sampling_threshold": self.cognitive_sampling_threshold,
-            "egalitarian_initialization": self.egalitarian_initialization,
             "llm_provider": self.llm_provider or llm_cfg.get("provider"),
             "llm_model": self.llm_model or llm_cfg.get("model"),
+            "llm_temperature": self.llm_temperature,
         }
 
 
@@ -253,9 +247,6 @@ def _seal_run_log(
     finalize_outcomes(log, world.agents, world.relationships)
     log.outcomes["career_hostage_index"] = career_hostage_index(world)
     log.outcomes["pi_control_surface"] = pi_control_surface(world)
-    from src.experiments.social_metrics import compute_social_emergence_metrics
-
-    log.outcomes.update(compute_social_emergence_metrics(log))
     log.outcomes.update(summarize_pressure_fields(log.actions))
     log.outcomes["probe_suggestions"] = probe.suggest(log.round_records)
     log.noise_log = noise.to_list()
@@ -282,10 +273,6 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
     log = RunLog(run_id=run_id, config=cfg.to_dict())
 
     world = _filter_world(load_world(), cfg)
-    if cfg.population_size:
-        world = expand_population(world, PopulationSpec(target_size=cfg.population_size, seed=cfg.seed, labs=cfg.population_labs, egalitarian=cfg.egalitarian_initialization))
-    if cfg.egalitarian_initialization and not cfg.population_size:
-        world = equalize_population(world)
     if cfg.hierarchy_lesion:
         world = _apply_hierarchy_lesion(world)
     if cfg.status_lesion:
@@ -319,11 +306,8 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
         "status_lesion": cfg.status_lesion,
         "trust_lesion": cfg.trust_lesion,
         "observation_lesion": cfg.observation_lesion,
-        "population_size": cfg.population_size,
-        "population_labs": cfg.population_labs,
         "cognitive_sampling_top_k": cfg.cognitive_sampling_top_k,
         "cognitive_sampling_threshold": cfg.cognitive_sampling_threshold,
-        "egalitarian_initialization": cfg.egalitarian_initialization,
     }
 
     round_num = 0

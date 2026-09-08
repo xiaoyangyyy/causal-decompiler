@@ -189,22 +189,7 @@ def apply_memory_intervention(
                 )
             )
         ]
-        removed = before - len(agent.memory)
-        if removed:
-            agent.beliefs.pi_fairness = clamp(agent.beliefs.pi_fairness - 0.04)
-            agent.beliefs.my_first_author_probability = clamp(
-                agent.beliefs.my_first_author_probability - 0.10,
-            )
-            agent.beliefs.team_trust = clamp(agent.beliefs.team_trust + 0.03)
-            agent.emotion.resentment = clamp(agent.emotion.resentment - 0.14)
-            agent.emotion.anger = clamp(agent.emotion.anger - 0.10)
-            agent.emotion.anxiety = clamp(agent.emotion.anxiety - 0.06)
-            agent.emotion.loyalty = clamp(agent.emotion.loyalty + 0.05)
-            for edge in world.relationships:
-                if edge.source == agent_id and edge.target == pi_id:
-                    edge.trust = clamp(edge.trust + 0.06)
-                    edge.resentment = clamp(edge.resentment - 0.08)
-        return removed
+        return before - len(agent.memory)
     elif intervention.variant == "memory_insert_pi_promise":
         idx = len(agent.memory) + 1
         agent.memory.append({

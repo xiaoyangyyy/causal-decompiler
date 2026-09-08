@@ -10,3 +10,5 @@ max_tokens: 1024
 api_key_env: DEEPSEEK_API_KEY
 request_delay_sec: 3.0
 max_retries: 12
+# V4 Flash thinking is billed as output. Paper MRI uses non-thinking JSON.
+thinking: disabled

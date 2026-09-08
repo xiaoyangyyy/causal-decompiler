@@ -68,15 +68,7 @@ A lesion asks a counterfactual question over the same selected action:
 How much selected-action pressure remains if dimension D is removed?
 ```
 
-The module [`src/experiments/social_potential_ablation.py`](../src/experiments/social_potential_ablation.py) summarizes this post-hoc.
-
-Example:
-
-```python
-from src.experiments.social_potential_ablation import run_social_potential_ablation
-
-rows = run_social_potential_ablation("A", "A2", seeds=3, max_rounds=60)
-```
+Each action log records the field on the selected action. MRI reports read those traces; there is no separate ablation matrix.
 
 ## 5. Why post-hoc first?
 

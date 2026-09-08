@@ -26,7 +26,7 @@ from src.engine.prompts import (
 )
 from src.world.actions import ActionType, get_allowed_actions
 from src.world.models import Agent, EventAtom, WorldState
-from src.world.organization import default_private_intent, observation_gain, primary_authority
+from src.world.organization import default_private_intent, observation_gain, primary_authority, resolve_event_cast
 
 from .event_agent import is_agent_active
 
@@ -80,7 +80,7 @@ def _normalize_action_response(
             "target": comm_target,
             "content_summary": str(comm.get("content_summary", f"{agent.id} re {event.type}")),
         },
-        "public_position": public,
+        "public_position": _align_public_to_action(atype, public),
         "private_intent": private,
         "llm_raw": raw,
     }
@@ -108,6 +108,58 @@ def _sample_payload(payloads: list[dict[str, Any]], *, seed: int, round_num: int
     return payloads[-1]
 
 
+_DRAFT_CREDIT_ACTIONS = frozenset({
+    "ask_for_authorship", "privately_lobby_pi", "confront", "challenge_claim",
+    "document_contribution", "request_mediation", "cite_prior_memory",
+    "leak_concern", "rebel", "withdraw",
+})
+
+# Public credit claims cannot be rendered as team_support (lobby may stay hypocritical).
+_PUBLIC_CREDIT_ACTIONS = frozenset({
+    "ask_for_authorship", "confront", "challenge_claim", "document_contribution",
+    "cite_prior_memory", "rebel", "withdraw", "request_mediation",
+})
+_TEAM_SUPPORT_ACTIONS = frozenset({"comply", "support_teammate"})
+
+
+def stance_prior_for_action(action_type: str) -> dict[str, str]:
+    if action_type in _PUBLIC_CREDIT_ACTIONS:
+        return {"statement_type": "self_advocacy", "authorship_claim": "first_author"}
+    if action_type in _TEAM_SUPPORT_ACTIONS:
+        return {"statement_type": "team_support", "authorship_claim": "any_authorship"}
+    return {"statement_type": "neutral", "authorship_claim": "any_authorship"}
+
+
+def _align_public_to_action(action_type: str, public: dict[str, Any] | None) -> dict[str, Any]:
+    aligned = dict(public or {})
+    stmt = str(aligned.get("statement_type") or "neutral")
+    if action_type in _PUBLIC_CREDIT_ACTIONS and stmt in {"team_support", "neutral", ""}:
+        aligned["statement_type"] = "self_advocacy"
+        if not aligned.get("authorship_claim") or aligned.get("authorship_claim") == "any_authorship":
+            aligned["authorship_claim"] = "first_author"
+    elif action_type in _TEAM_SUPPORT_ACTIONS and stmt in {"self_advocacy", ""}:
+        aligned["statement_type"] = "team_support"
+    aligned.setdefault("statement_type", "neutral")
+    aligned.setdefault("authorship_claim", "any_authorship")
+    return aligned
+
+
+def _focus_draft_payloads(event: EventAtom, agent: Agent, world: WorldState, payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if event.type != "authorship_draft":
+        return payloads
+    if agent.id != (resolve_event_cast(world).idea or "phd_a"):
+        return payloads
+    credit = [p for p in payloads if str(p.get("type")) in _DRAFT_CREDIT_ACTIONS]
+    pool = credit or payloads
+    pool = sorted(
+        pool,
+        key=lambda item: float(item.get("fused_tendency", item.get("probability", item.get("tendency", 0.0)))),
+        reverse=True,
+    )[:3]
+    key = "fused_tendency" if any("fused_tendency" in item for item in pool) else "probability"
+    return _normalize_probability_payloads(pool, key=key, temperature=0.09)
+
+
 def _coerce_score(value: Any) -> float:
     try:
         score = float(value)
@@ -132,7 +184,9 @@ def _scripted_render_action(agent: Agent, event: EventAtom, selected_payload: di
             "target": target,
             "content_summary": f"{agent.id} follows field-selected {action_type} under {event.type}",
         },
-        "public_position": {"statement_type": "neutral", "authorship_claim": "any_authorship"},
+        "public_position": _align_public_to_action(
+            action_type, {"statement_type": "neutral", "authorship_claim": "any_authorship"},
+        ),
         "private_intent": {
             "goal": default_private_intent(agent, action_type)["goal"],
             "strategy": action_type,
@@ -140,10 +194,16 @@ def _scripted_render_action(agent: Agent, event: EventAtom, selected_payload: di
         },
         "llm_raw": {"source": "scripted_unsampled_render"},
     }
-def _normalize_probability_payloads(payloads: list[dict[str, Any]], key: str = "fused_tendency") -> list[dict[str, Any]]:
+
+
+def _normalize_probability_payloads(
+    payloads: list[dict[str, Any]],
+    key: str = "fused_tendency",
+    temperature: float = 0.22,
+) -> list[dict[str, Any]]:
     if not payloads:
         return []
-    probs = _softmax([float(item.get(key, 0.0)) for item in payloads], temperature=0.22)
+    probs = _softmax([float(item.get(key, 0.0)) for item in payloads], temperature=temperature)
     out = []
     for item, prob in zip(payloads, probs):
         copied = dict(item)
@@ -425,6 +485,11 @@ class RolePolicyAgent:
                 local_config,
             )
             scoring_audit["policy_mode"] = policy_mode
+        if not candidate_payload:
+            candidate_payload = base_payload
+        candidate_payload = _focus_draft_payloads(event, agent, world, candidate_payload)
+        if not candidate_payload:
+            candidate_payload = base_payload
         selected_payload = _sample_payload(
             candidate_payload,
             seed=seed,
@@ -477,6 +542,7 @@ class RolePolicyAgent:
                 avoid_actions=dynamic_avoid,
                 retry_note=retry_note,
                 validation_error=last_error,
+                stance_prior=stance_prior_for_action(str(selected_payload.get("type", ""))),
             )
             try:
                 raw = self.llm.complete_json(ROLE_POLICY_SYSTEM, user_prompt)

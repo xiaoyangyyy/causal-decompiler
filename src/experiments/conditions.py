@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
 
 from src.engine.intervention import Intervention, load_interventions
 from src.engine.simulation import SimConfig
@@ -96,8 +95,6 @@ EXPERIMENT_VALIDITY: dict[str, ExperimentCondition] = {
     "V1": ExperimentCondition("V", "V1", "no_memory", [], disable_memory=True, primary_outcomes=["protest_authorship", "memory_authorship_cluster_strength"]),
     "V2": ExperimentCondition("V", "V2", "shuffled_memory", [], shuffle_memory=True, primary_outcomes=["protest_authorship", "memory_authorship_cluster_strength"]),
     "V3": ExperimentCondition("V", "V3", "delayed_insert", ["INT_DELAYED_MEMORY_INSERT"], primary_outcomes=["protest_authorship", "memory_authorship_cluster_strength"]),
-    "V4": ExperimentCondition("V", "V4", "anthropic_model", [], llm_provider="anthropic", llm_model="claude-3-5-haiku-20241022", primary_outcomes=["protest_authorship"]),
-    "V5": ExperimentCondition("V", "V5", "openai_alt_model", [], llm_provider="openai", llm_model="gpt-4o", primary_outcomes=["protest_authorship"]),
     "V6": ExperimentCondition("V", "V6", "full_memory_baseline", ["INT_AUTH_EXPLICIT"], primary_outcomes=["protest_authorship", "memory_authorship_cluster_strength"]),
 }
 
@@ -153,21 +150,6 @@ def build_sim_config(
         output_dir=Path(output_dir) if output_dir else None,
         cognitive_sampling_top_k=top_k,
     )
-
-
-def condition_summary() -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for exp_id, table in EXPERIMENT_MATRIX.items():
-        for cid, cond in table.items():
-            rows.append({
-                "experiment": exp_id,
-                "condition": cid,
-                "label": cond.label,
-                "interventions": cond.intervention_ids,
-                "primary_outcomes": list(cond.primary_outcomes),
-                "runs_per_seed_batch": 1,
-            })
-    return rows
 
 
 EXPERIMENT_PRIMARY_OUTCOME = {

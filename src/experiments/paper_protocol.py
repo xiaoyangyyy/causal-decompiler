@@ -1,4 +1,7 @@
-"""Top-venue paper protocol: Causal Decompiler battery + optional CRN contrasts.
+"""Paper protocol: Causal Decompiler MRI plus optional CRN contrasts.
+
+This is the only experiment-facing MRI entry. Reviewers rerun
+`python -m src.experiments paper`. Library callers use `run_paper_protocol`.
 
 Phases (all CRN-paired, all replay LLM traces):
 
@@ -8,10 +11,7 @@ Phases (all CRN-paired, all replay LLM traces):
 4. Contrastive skip vs budgeted story Shapley (AND-cause lie)
 5. Three-worlds spillover / hypocrisy
 6. Optional λ lesion (field vs LLM) — cache misses expected
-7. Optional A/B/C/D CRN contrasts
-
-This is the experiment code a reviewer can rerun. It does not call a paid API
-unless the SimConfig says so.
+7. Optional A/B/C/D/V CRN contrasts
 """
 
 from __future__ import annotations
@@ -21,12 +21,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from src.engine.causal import CausalDecompiler, CausalMRIReport
+from src.engine.causal import CausalDecompiler, CausalMRIReport, CausalOp
 from src.engine.causal.twin import load_factual, sim_config_from_log
 from src.engine.simulation import SimConfig
 from src.experiments.paper_contrasts import run_paper_contrasts
 from src.experiments.paper_tables import latex_split_y, render_paper_markdown
-from src.experiments.report import generate_report
 from src.world.loader import PROJECT_ROOT
 
 DEFAULT_PAPER_DIR = PROJECT_ROOT / "output" / "reports"
@@ -53,22 +52,13 @@ class PaperProtocolResult:
         }
 
 
-def _summarize(report: CausalMRIReport) -> str:
-    findings = report.findings or []
-    replay = report.llm_replay or {}
-    lines = [
-        f"run={report.factual_run_id} identity={report.identity_twin_ok} Y={report.factual_y:.4f}",
-        f"replay hits={replay.get('identity_run_hits', 0)} misses={replay.get('identity_run_misses', 0)}",
-    ]
-    lines.extend(f"finding: {item}" for item in findings[:6])
-    return "\n".join(lines)
-
-
 def run_paper_protocol(
     config: SimConfig | None = None,
     *,
     from_jsonl: Path | str | None = None,
     outcome: str = "protest_authorship",
+    extra_ops: list[CausalOp] | None = None,
+    memory_rounds: list[int] | None = None,
     auto_battery: bool = True,
     include_lambda: bool = False,
     include_toy_shapley: bool = True,
@@ -79,10 +69,16 @@ def run_paper_protocol(
 ) -> PaperProtocolResult:
     decompiler = CausalDecompiler()
     factual = load_factual(from_jsonl) if from_jsonl else None
-    cfg = config or (sim_config_from_log(factual) if factual is not None else SimConfig(mvp=True, max_rounds=8, llm_provider="scripted"))
+    cfg = config or (
+        sim_config_from_log(factual)
+        if factual is not None
+        else SimConfig(mvp=True, max_rounds=8, llm_provider="scripted")
+    )
     report = decompiler.decompile(
         cfg,
         outcome=outcome,
+        extra_ops=extra_ops,
+        memory_rounds=memory_rounds,
         auto_battery=auto_battery,
         include_lambda=include_lambda,
         include_toy_shapley=include_toy_shapley,
@@ -101,7 +97,7 @@ def run_paper_protocol(
     markdown = render_paper_markdown(report.to_dict(), contrasts=table_rows)
     result = PaperProtocolResult(
         report=report,
-        summary=_summarize(report),
+        summary=report.summary(),
         tables_markdown=markdown,
         latex_split_y=latex_split_y(report.to_dict()),
         contrasts=contrast_payload,
@@ -112,9 +108,14 @@ def run_paper_protocol(
         run_id = decompiler.last_log.run_id
         json_path = out_dir / f"paper_protocol_{run_id}.json"
         md_path = out_dir / f"paper_protocol_{run_id}.md"
-        json_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False, default=str), encoding="utf-8")
+        json_path.write_text(
+            json.dumps(result.to_dict(), indent=2, ensure_ascii=False, default=str),
+            encoding="utf-8",
+        )
         md_path.write_text(markdown, encoding="utf-8")
-        generate_report(log=decompiler.last_log, output_dir=out_dir)
+        runs_dir = PROJECT_ROOT / "output" / "runs"
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        decompiler.last_log.write_jsonl(runs_dir / f"run_{run_id}.jsonl")
         result.json_path = json_path
         result.markdown_path = md_path
     return result

@@ -1,4 +1,4 @@
-﻿"""Tests for LLM wording/action drift audit."""
+"""Tests for LLM wording/action drift audit."""
 
 from __future__ import annotations
 
@@ -22,3 +22,19 @@ def test_critic_flags_public_action_drift():
     codes = {v.code for v in violations}
     assert "llm_public_action_drift" in codes
     assert "llm_private_strategy_drift" in codes
+
+
+def test_critic_accepts_self_advocacy_on_credit_claims():
+    world = load_world()
+    agent = world.agents["phd_a"]
+    action = {
+        "agent": "phd_a",
+        "type": "ask_for_authorship",
+        "target": "pi",
+        "intensity": 0.7,
+        "public_position": {"statement_type": "self_advocacy", "authorship_claim": "first_author"},
+        "private_intent": {"strategy": "ask_for_authorship"},
+        "selected_action": {"type": "ask_for_authorship"},
+    }
+    codes = {v.code for v in CriticAgent().check(action, agent, world)}
+    assert "llm_public_action_drift" not in codes

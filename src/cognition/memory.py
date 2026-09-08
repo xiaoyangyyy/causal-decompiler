@@ -232,7 +232,8 @@ def write_memory(
     if event.type == "authorship_promise":
         content_type = "promise_fulfilled"
     if event.type == "authorship_ambiguity":
-        content_type = "promise_broken"
+        # State ambiguity is contested credit, not a broken promise.
+        content_type = "authorship_signal"
     if event.type == "authorship_draft":
         if event.payload.get("draft_severity") == "honored" or event.framing == "positive":
             content_type = "promise_fulfilled"

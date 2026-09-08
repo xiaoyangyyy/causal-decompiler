@@ -12,7 +12,6 @@ from src.cognition.social_potential import compute_social_potential
 from src.engine.event_agent import EventAgent
 from src.world.loader import load_events, load_world
 from src.world.organization import agent_contribution_share, can_directly_observe, resolve_event_cast
-from src.world.population import PopulationSpec, expand_population
 
 
 def _edge(world, src, tgt):
@@ -105,8 +104,8 @@ def test_reputation_moves_after_public_actions():
     assert current_reputation(agent) < before
 
 
-def test_scaled_state_events_use_existing_agents():
-    world = expand_population(load_world(), PopulationSpec(target_size=50, seed=3, labs=2))
+def test_state_events_use_existing_agents():
+    world = load_world()
     event = EventAgent(seed=3).generate(8, world)
     cast = resolve_event_cast(world)
 
@@ -157,3 +156,50 @@ def test_team_event_updates_internal_witness_affect():
     assert result.agent_deltas["engineer_e"]["observation_channel"] == "direct"
     assert result.metrics["observation_direct_share"] > 0.4
     assert result.agent_deltas["engineer_e"]["emotion"] is not None
+
+
+def test_trust_has_recovery_floor_not_absorbing_zero():
+    world = load_world()
+    event = load_events()[0]
+    for edge in world.relationships:
+        if edge.source == "phd_a" and edge.target == "pi":
+            edge.trust = 0.10
+            edge.resentment = 1.0
+    for _ in range(80):
+        update_relationships(world, event, recalls={})
+        assert _edge(world, "phd_a", "pi").trust >= 0.06
+    assert _edge(world, "phd_a", "pi").trust > 0.0
+
+
+def test_neutral_rounds_do_not_pin_trust_to_floor():
+    world = load_world()
+    event = next(e for e in load_events() if e.type == "deadline_shift")
+    start = _edge(world, "phd_a", "pi").trust
+    for _ in range(40):
+        update_relationships(world, event, recalls={})
+    after = _edge(world, "phd_a", "pi").trust
+    assert after > 0.20
+    assert after > start - 0.08
+    for edge in world.relationships:
+        if edge.source in {"phd_a", "phd_b", "pi"} and edge.target in {"phd_a", "phd_b", "pi"}:
+            assert edge.trust > 0.06
+
+
+def test_authorship_draft_lowers_idea_pi_trust():
+    world = load_world()
+    draft = next(e for e in load_events() if e.event_id == "E052")
+    before = _edge(world, "phd_a", "pi").trust
+    update_relationships(world, draft, recalls={})
+    assert _edge(world, "phd_a", "pi").trust < before - 0.02
+
+
+def test_honored_draft_does_not_cut_trust_like_broken_draft():
+    world_broken = load_world()
+    world_honored = load_world()
+    draft = next(e for e in load_events() if e.event_id == "E052")
+    honored = draft.model_copy(update={"framing": "positive", "payload": {**draft.payload, "draft_severity": "honored"}})
+    start = _edge(world_broken, "phd_a", "pi").trust
+    update_relationships(world_broken, draft, recalls={})
+    update_relationships(world_honored, honored, recalls={})
+    assert _edge(world_broken, "phd_a", "pi").trust < start
+    assert _edge(world_honored, "phd_a", "pi").trust > _edge(world_broken, "phd_a", "pi").trust

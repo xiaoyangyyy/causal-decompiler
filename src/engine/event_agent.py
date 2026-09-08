@@ -167,12 +167,13 @@ class EventAgent:
                 framing="ambiguous",
                 memory_salience=_clamp(0.45 + 0.35 * dispute + 0.15 * idea_auth_memory),
                 tendency=(
-                    0.10
+                    0.05
                     + 0.34 * dispute
                     + 0.18 * project.deadline_pressure
                     + 0.16 * first_author_gap
                     + 0.14 * private_lobby_mass
                     + 0.08 * (pi_to_a.dependency if pi_to_a else 0.5)
+                    - 0.18 * idea_auth_memory
                 ),
                 payload={
                     "authorship_conflict_delta": 0.04 + 0.04 * dispute,

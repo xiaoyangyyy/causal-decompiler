@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from src.engine.run_log import RunLog
-from src.experiments.metrics import compute_run_metrics, mediation_fraction
+from src.experiments.metrics import compute_run_metrics
 from src.experiments.runner import run_single
 from src.world.loader import PROJECT_ROOT
 
@@ -155,7 +155,7 @@ def _format_llm_footprint(footprint: dict[str, Any]) -> str:
 
 def _format_causal_mri(report: dict[str, Any] | None) -> str:
     if not report:
-        return "_Causal decompiler not attached. Run `python -m src.experiments decompile`._"
+        return "_Causal decompiler not attached. Run `python -m src.experiments paper`._"
     lines = [
         f"- Identity twin: {'ok' if report.get('identity_twin_ok') else 'FAILED'}",
         f"- Outcome {report.get('outcome')}: factual Y={float(report.get('factual_y', 0)):.4f}",
@@ -171,10 +171,23 @@ def _format_causal_mri(report: dict[str, Any] | None) -> str:
         f"misses={replay.get('identity_run_misses', 0)}"
     )
     for item in (report.get("memory_irf") or [])[:6]:
+        split = (item.get("extras") or {}).get("split") or {}
+        ppd = (split.get("public_private_divergence_mean") or {}).get("ate")
+        extra = f", ΔPPD={float(ppd):+.4f}" if ppd is not None else ""
+        trust = (split.get("trust_pi_path_mean") or {}).get("ate")
+        if trust is not None:
+            extra += f", Δtrust_path={float(trust):+.4f}"
         lines.append(
-            f"- IRF {item.get('factor_id')}: ATE={float(item.get('ate', 0)):+.4f} "
-            f"(twin Y={float(item.get('twin_y', 0)):.4f})"
+            f"- IRF {item.get('factor_id')}: Δprotest={float(item.get('ate', 0)):+.4f}{extra}"
         )
+    for item in (report.get("forks") or []):
+        if item.get("patch") == "identity" or item.get("identical"):
+            continue
+        lines.append(
+            f"- Fork {item.get('factor_id')}: R{item.get('round')} {item.get('channel')} "
+            f"({item.get('agent')})"
+        )
+        break
     for item in (report.get("contrastive") or [])[:6]:
         lines.append(
             f"- Skip {item.get('factor_id')}: ATE={float(item.get('ate', 0)):+.4f}"
@@ -212,18 +225,20 @@ def generate_report_from_log(log: RunLog, metrics: dict[str, Any] | None = None)
     split = outcomes.get("split_y") if isinstance(outcomes.get("split_y"), dict) else {}
     if not split:
         split = {k: outcomes.get(k, 0) for k in (
-            "protest_authorship", "public_private_divergence_mean", "post_r52_compliance",
-            "trust_pi_final", "trust_pi_logged", "pi_fairness_r52",
+            "protest_authorship", "authorship_escalation_potential", "public_private_divergence_mean", "post_r52_compliance",
+            "trust_pi_final", "trust_pi_logged", "trust_pi_path_mean", "pi_fairness_r52",
             "promise_broken_strength_r52", "promise_honored_strength_r52",
             "memory_authorship_cluster_strength", "authorship_dispute_index",
         )}
     latent = (
         f"- Split Y: protest={float(split.get('protest_authorship', 0)):.3f}, "
+        f"potential={float(split.get('authorship_escalation_potential', outcomes.get('authorship_escalation_potential', 0))):.3f}, "
         f"PPD(mean)={float(split.get('public_private_divergence_mean', 0)):.3f}, "
         f"PPD(last)={float(split.get('public_private_divergence_last', outcomes.get('public_private_divergence_last', 0))):.3f}, "
         f"R52 comply={float(split.get('post_r52_compliance', 0)):.3f}\n"
         f"- Trust: relationship={float(split.get('trust_pi_final', outcomes.get('trust_pi_final', 0))):.3f}, "
         f"logged={float(split.get('trust_pi_logged', outcomes.get('trust_pi_logged', 0))):.3f}, "
+        f"path_mean={float(split.get('trust_pi_path_mean', outcomes.get('trust_pi_path_mean', 0))):.3f}, "
         f"pi_fairness_r52={float(split.get('pi_fairness_r52', outcomes.get('pi_fairness_r52', 0))):.3f}\n"
         f"- Memory cluster strength: {float(outcomes.get('memory_authorship_cluster_strength', 0)):.3f}\n"
         f"- Authority compliance: {float(outcomes.get('authority_compliance', 0)):.3f}"
@@ -232,7 +247,7 @@ def generate_report_from_log(log: RunLog, metrics: dict[str, Any] | None = None)
     memory_causal = (
         f"- Authorship memory cluster (R3鈥揜40): {outcomes.get('memory_authorship_cluster_strength', 0):.3f}\n"
         f"- Promise broken strength @R52: {outcomes.get('promise_broken_strength_r52', 0):.3f}\n"
-        f"- Confound ladder proxy: memory contribution is reported as a continuous mediation fraction"
+        f"- Memory IRF (not |ΔM/ΔY| mediation) is in the Causal Decompiler MRI section"
     )
 
     interventions = log.interventions_applied
@@ -311,21 +326,3 @@ def generate_report(
     meta = {"run_id": rid, "metrics": metrics}
     path.with_suffix(".json").write_text(json.dumps(meta, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
     return path
-
-
-def generate_finding_summary(
-    control_logs: list[RunLog],
-    treatment_logs: list[RunLog],
-    intervention_label: str,
-) -> str:
-    med = mediation_fraction(control_logs, treatment_logs)
-    y_c = sum(l.outcomes.get("protest_authorship", 0) for l in control_logs) / max(len(control_logs), 1)
-    y_t = sum(l.outcomes.get("protest_authorship", 0) for l in treatment_logs) / max(len(treatment_logs), 1)
-    delta_pct = (y_c - y_t) * 100
-    note = med.get("note") or ""
-    extra = f" {note}." if note else ""
-    return (
-        f"`do({intervention_label})` shifted protest probability by {delta_pct:+.0f}pp. "
-        f"Mediation fraction via authorship memory cluster: {med['mediation_fraction']:.0%}."
-        f"{extra}"
-    )

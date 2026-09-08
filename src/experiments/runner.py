@@ -1,13 +1,12 @@
-"""Single experiment run orchestration."""
+"""Single A/B/C/D/V condition run. The paper MRI is `run_paper_protocol`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
 
-from src.engine.run_log import RunLog
 from src.engine.simulation import run_simulation
-from src.experiments.conditions import ExperimentCondition, build_sim_config, get_condition
+from src.experiments.conditions import build_sim_config, get_condition
 from src.experiments.metrics import compute_run_metrics
 
 
@@ -24,23 +23,3 @@ def run_single(
     log = run_simulation(cfg)
     metrics = compute_run_metrics(log)
     return {"log": log, "metrics": metrics, "condition": condition}
-
-
-def run_experiment_a(seed: int, condition_id: str = "A1", **kwargs: Any) -> RunLog:
-    return run_single("A", seed, condition_id, **kwargs)["log"]
-
-
-def run_experiment_b(seed: int, condition_id: str = "B1", **kwargs: Any) -> RunLog:
-    return run_single("B", seed, condition_id, **kwargs)["log"]
-
-
-def run_experiment_c(seed: int, condition_id: str = "C1", **kwargs: Any) -> RunLog:
-    return run_single("C", seed, condition_id, **kwargs)["log"]
-
-
-def run_experiment_d(seed: int, condition_id: str = "D1", **kwargs: Any) -> RunLog:
-    return run_single("D", seed, condition_id, **kwargs)["log"]
-
-
-def run_experiment_validity(seed: int, condition_id: str = "V1", **kwargs: Any) -> RunLog:
-    return run_single("V", seed, condition_id, **kwargs)["log"]
