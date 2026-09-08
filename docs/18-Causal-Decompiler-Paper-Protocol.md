@@ -22,7 +22,13 @@ Scripted smoke (no API):
 python -m src.experiments paper --rounds 8 --seed 11 --llm-provider scripted
 ```
 
-`--sampled-top-k` defaults to 1. DeepSeek config sets `thinking: disabled`.
+`--sampled-top-k` defaults to 1. DeepSeek config sets `thinking: disabled`. Put `DEEPSEEK_API_KEY` in gitignored `.env`.
+
+Paid 14-agent / 60-round MRI:
+
+```powershell
+python -u -m src.experiments paper --rounds 60 --full-cast --llm-provider deepseek --sampled-top-k 1 --seed 11 --output output/reports
+```
 
 Full 60-round MRI after a persisted factual run (replays the LLM sidecar; twins re-derive keyed noise from the seed, they do not inject persisted draws):
 
@@ -52,8 +58,8 @@ CLI `decompile` is an alias of `paper`.
 | Table | Estimand |
 |---|---|
 | Identity twin | CRN + LLM replay hits/misses |
-| Split-Y | protest, PPD, R52 comply, cluster, promise broken/honored, trust logged |
-| Memory IRF | Δ protest / Δ PPD / Δ R52 comply over delete-time |
+| Split-Y | protest, potential, PPD, R52 comply, cluster, promise broken/honored, trust logged, trust path-mean |
+| Memory IRF | Δ protest / Δ potential / Δ PPD / Δ trust_path over delete-time |
 | Fork moment | first round+channel where the twin leaves the factual transcript |
 | Shapley vs skip | planted oracle + E003 × E052 |
 | Three worlds | skip draft beat; total / omniscient / gated / hypocrisy |

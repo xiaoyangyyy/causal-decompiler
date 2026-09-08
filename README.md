@@ -4,6 +4,61 @@
 
 一个 14 角色、60 轮的学术实验室权力博弈沙盒。论文对象是对**一条冻结事实轨迹**做 Causal MRI：冻结外生噪声和 LLM 文本，修补展开后的 SCM，读公开 vs 私下结果向量。
 
+主入口是 [`docs/18-Causal-Decompiler-Paper-Protocol.md`](docs/18-Causal-Decompiler-Paper-Protocol.md)。不要跑独立 seed 的条件矩阵，也不要重建已删除的 scale / 630-cell ATE 扫描。
+
+## 快速验证
+
+```powershell
+pip install -r requirements.txt
+python -m pytest tests/ -q
+
+# 脚本烟雾（无 API）
+python -m src.experiments paper --rounds 8 --seed 11 --llm-provider scripted
+```
+
+## 论文 MRI
+
+`paper` 写出 identity twin、split-Y、记忆 IRF、Shapley vs skip、三世界。Split-Y 同时读公开抗议、潜在势、PPD，以及 idea→PI 的 `trust_pi_logged`（草案快照）和 `trust_pi_path_mean`（路径均值）。
+
+密钥放 gitignored `.env` 的 `DEEPSEEK_API_KEY=`，不要写进 yaml。配置见 [`config/llm.deepseek.yaml`](config/llm.deepseek.yaml)（`thinking: disabled`）。
+
+```powershell
+# 连通性
+python scripts/ping_deepseek.py
+
+# 付费：一条 14 人 / 60 轮事实轨迹 + MRI
+$env:LABWARS_PROGRESS = "1"
+python -u -m src.experiments paper --rounds 60 --full-cast --llm-provider deepseek --sampled-top-k 1 --seed 11 --output output/reports
+
+# 已有 jsonl 时只做 MRI，不重付事实世界
+python -m src.experiments paper --from-jsonl output/runs/run_XXXX.jsonl --full-cast --output output/reports
+```
+
+`--sampled-top-k` 默认为 1。`--from-jsonl` 回放沿用落盘配置，不要改 top-k。`--include-lambda` 会改写 prompt，LLM 缓存会 miss。
+
+产物：`output/reports/paper_protocol_{run_id}.md` 与 `.json`（目录 gitignored）。
+
+调试单条件（不是论文 MRI）：
+
+```powershell
+python -m src.experiments run -e A -c A2 --seed 42
+python -m src.experiments report -e A -c A2 --seed 42
+```
+
+`decompile` 是 `paper` 的别名。可选 `--contrasts A --contrast-seeds 0,1,2` 做 A/B/C/D/V 的 CRN 对照，不是独立 seed 网格。
+
+## LLM 分工
+
+连续 action field 生成候选；LLM 对候选做主观 plausibility 打分；系统融合 `field_score` 与 `llm_score` 后采样 primary action。信用类动作（`ask_for_authorship` 等）的公开立场约束为 `self_advocacy`，不覆盖为 `team_support`。LLM 还写 memory interpretation 与私下意图，不自由覆盖 primary action。
+
+| mode | 行为生成 |
+|---|---|
+| `social_physics` | 只使用社会动力学先验 |
+| `dual_engine` | field 候选 + LLM 打分（默认） |
+| `llm_native` | LLM 直接生成候选，再映射到 action schema |
+
+λ lesion（field vs LLM）是 MRI 可选补丁，不是单独的扫描矩阵。
+
 ## 文档索引
 
 | 文档 | 内容 |
@@ -23,59 +78,19 @@
 | [docs/15-Theory-Grounded-Agent-Variables.md](docs/15-Theory-Grounded-Agent-Variables.md) | 变量的社会科学锚点 |
 | [docs/18-Causal-Decompiler-Paper-Protocol.md](docs/18-Causal-Decompiler-Paper-Protocol.md) | **论文实验协议（主入口）** |
 
-## 论文实验
-
-不要跑独立 seed 的条件矩阵。主命令是 `paper`：identity twin、split-Y、记忆 IRF、Shapley vs skip、三世界；可选 A/B/C/D/V 的 CRN 对照。
-
-```powershell
-python -m pytest tests/ -q
-
-# 脚本烟雾（无 API）
-python -m src.experiments paper --rounds 8 --seed 11 --llm-provider scripted
-
-# 付费 LLM：先落一条 60 轮事实轨迹，再从 jsonl 做 MRI（不重付事实世界）
-$env:DEEPSEEK_API_KEY = Read-Host "Paste DEEPSEEK_API_KEY"
-$env:LABWARS_LLM_CONFIG = "config/llm.deepseek.yaml"
-python -m src.experiments paper --rounds 60 --full-cast --llm-provider openai --sampled-top-k 1
-python -m src.experiments paper --from-jsonl output/runs/run_XXXX.jsonl --full-cast --contrasts A --contrast-seeds 0,1,2
-```
-
-`--sampled-top-k` 默认为 1（每轮只让一名 agent 走 LLM 打分）。`--from-jsonl` 回放时沿用落盘配置，不要改 top-k。`--include-lambda` 会改写 prompt，缓存会 miss。
-
-DeepSeek 配置见 [`config/llm.deepseek.yaml`](config/llm.deepseek.yaml)（`thinking: disabled`）。密钥只放环境变量或 gitignored `.env`。
-
-调试单条件（不是论文 MRI）：
-
-```powershell
-python -m src.experiments run -e A -c A2 --seed 42
-python -m src.experiments report -e A -c A2 --seed 42
-```
-
-## LLM 分工
-
-连续 action field 生成候选；LLM 对候选做主观 plausibility 打分；系统融合 `field_score` 与 `llm_score` 后采样 primary action。LLM 还写 memory interpretation 与公开/私下立场。LLM 不自由覆盖 primary action。
-
-| mode | 行为生成 |
-|---|---|
-| `social_physics` | 只使用社会动力学先验 |
-| `dual_engine` | field 候选 + LLM 打分（默认） |
-| `llm_native` | LLM 直接生成候选，再映射到 action schema |
-
-λ lesion（field vs LLM）是 MRI 可选补丁，不是单独的扫描矩阵。
-
 ## 项目结构
 
 ```
 LabWars/
 ├── 00-总文档.md
 ├── README.md
-├── docs/
+├── docs/                  # 18 为论文协议
 ├── schemas/
-├── config/
+├── config/                # llm.deepseek.yaml 不含密钥
 ├── src/
 │   ├── world/
 │   ├── cognition/
-│   ├── engine/          # 含 src/engine/causal（Decompiler）
-│   └── experiments/     # paper MRI, CRN contrasts, A–D/V catalog
-└── output/
+│   ├── engine/            # 含 causal Decompiler
+│   └── experiments/       # paper MRI, CRN contrasts, A–D/V
+└── output/                # gitignored：runs + reports
 ```
