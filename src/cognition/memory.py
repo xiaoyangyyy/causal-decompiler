@@ -1,7 +1,8 @@
-"""Memory resonance field 鈥?continuous recall without cutoffs."""
+"""Memory resonance field — continuous recall without cutoffs."""
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass, field
 from typing import Any
@@ -280,11 +281,17 @@ def write_memory(
     return record
 
 
+def _stable_unit(text: str) -> float:
+    """Process-stable 0–1 embedding. Builtin hash() is randomized per interpreter."""
+    digest = hashlib.sha256(str(text).encode("utf-8")).digest()
+    return (int.from_bytes(digest[:4], "big") % 100) / 100.0
+
+
 def _context_vector(event: EventAtom, current_round: int) -> dict[str, float]:
     ctype = CONTENT_TYPE_BY_EVENT.get(event.type, "credit_claim")
     return {
         "target_match": 1.0 if event.source else 0.5,
-        "content_type": hash(ctype) % 100 / 100.0,
+        "content_type": _stable_unit(ctype),
         "recency": recency_kernel(0),
         "salience": event.memory_salience,
         "framing": FRAMING_VALENCE.get(event.framing, 0.0) + 0.5,
@@ -298,8 +305,8 @@ def _memory_vector(mem: dict[str, Any], current_round: int) -> list[float]:
         float(mem["strength"]),
         float(mem["valence"]) + 0.5,
         recency_kernel(age),
-        hash(mem["content_type"]) % 100 / 100.0,
-        hash(mem.get("target", "")) % 100 / 100.0,
+        _stable_unit(str(mem.get("content_type") or "")),
+        _stable_unit(str(mem.get("target") or "")),
     ]
 
 

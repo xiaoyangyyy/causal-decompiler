@@ -180,12 +180,18 @@ def _format_causal_mri(report: dict[str, Any] | None) -> str:
         lines.append(
             f"- IRF {item.get('factor_id')}: Δprotest={float(item.get('ate', 0)):+.4f}{extra}"
         )
+    ir = report.get("social_ir") or {}
+    if ir.get("node_count"):
+        lines.append(f"- Social Causal IR: {ir.get('node_count')} nodes / {ir.get('edge_count')} edges")
+    min_cause = report.get("minimal_cause") or {}
+    if min_cause.get("set"):
+        lines.append("- Minimal cause: {" + ", ".join(str(x) for x in min_cause.get("set")) + "}")
     for item in (report.get("forks") or []):
         if item.get("patch") == "identity" or item.get("identical"):
             continue
         lines.append(
             f"- Fork {item.get('factor_id')}: R{item.get('round')} {item.get('channel')} "
-            f"({item.get('agent')})"
+            f"({item.get('agent')}) kind={item.get('fork_kind') or 'meaningful'}"
         )
         break
     for item in (report.get("contrastive") or [])[:6]:

@@ -98,9 +98,119 @@ def test_decompiler_smoke_report():
     assert report.memory_irf
     assert report.shapley_toy["promise"] == 0.5
     assert report.contrastive_toy_lie["promise"] == 1.0
-    assert report.three_worlds.get("factor_id", "").startswith("EVENT_SKIP")
     assert report.forks
     assert report.forks[0]["patch"] == "identity"
+    assert report.layer_interventions.get("worlds")
+    assert report.hierarchical_search.get("evaluated")
+    assert report.bidirectional_search.get("deletion")
+    assert report.channels.get("ppg") is not None
+
+
+def test_scripted_eight_round_full_battery_has_layers_and_k3():
+    from src.experiments.paper_tables import render_paper_markdown
+
+    report = CausalDecompiler().decompile(_short_cfg(max_rounds=8))
+    worlds = report.layer_interventions.get("worlds") or {}
+    assert len(worlds) == 4
+    assert "do_belief" not in worlds
+    assert report.hierarchical_search.get("evaluated")
+    assert report.bidirectional_search.get("deletion")
+    assert report.paired_effect.get("k") == 3
+    md = render_paper_markdown(report.to_dict())
+    assert "Hierarchical search" in md
+    assert "Individual paired causal effect" in md
+    assert "Minimal Effect-Recovery Set" in md
+    assert "Layer-specific interventions" in md
+    assert "not run on long LLM MRI" not in md
+    assert "| k | 3 |" in md
+
+
+def test_paper_top_k_uses_five_for_llm_even_on_short_runs():
+    from src.engine.causal.search import PAPER_TOP_K_LLM, PAPER_TOP_K_SCRIPTED, paper_top_k
+
+    assert paper_top_k(SimConfig(max_rounds=8, llm_provider="scripted")) == PAPER_TOP_K_SCRIPTED
+    assert paper_top_k(SimConfig(max_rounds=8, llm_provider="ollama")) == PAPER_TOP_K_LLM
+    assert paper_top_k(SimConfig(max_rounds=60, llm_provider="deepseek")) == PAPER_TOP_K_LLM
+
+
+def test_long_llm_auto_battery_runs_layers_without_cheap_twins(monkeypatch):
+    from src.engine.causal import decompiler as decmod
+    from src.engine.causal.dynamics import distributional_k
+    from src.engine.simulation import SimConfig
+
+    assert distributional_k(SimConfig(max_rounds=60, llm_provider="deepseek")) == 1
+    monkeypatch.setattr(decmod, "distributional_k", lambda cfg: 1)
+    called = {"layers": 0, "hier": 0, "bi": 0}
+    real_layers = decmod.layer_interventions
+    real_hier = decmod.run_hierarchical_search
+    real_bi = decmod.run_bidirectional_search
+
+    def spy_layers(*args, **kwargs):
+        called["layers"] += 1
+        return real_layers(*args, **kwargs)
+
+    def spy_hier(*args, **kwargs):
+        called["hier"] += 1
+        assert kwargs.get("new_twin_budget") == 2
+        return real_hier(*args, **kwargs)
+
+    def spy_bi(*args, **kwargs):
+        called["bi"] += 1
+        return real_bi(*args, **kwargs)
+
+    monkeypatch.setattr(decmod, "layer_interventions", spy_layers)
+    monkeypatch.setattr(decmod, "run_hierarchical_search", spy_hier)
+    monkeypatch.setattr(decmod, "run_bidirectional_search", spy_bi)
+    report = CausalDecompiler().decompile(
+        _short_cfg(max_rounds=6),
+        memory_rounds=[3],
+        include_toy_shapley=False,
+        include_story_shapley=False,
+        include_three_worlds=False,
+    )
+    assert called["layers"] == 1
+    assert called["hier"] == 1
+    assert called["bi"] == 1
+    assert report.layer_interventions.get("worlds")
+    assert report.paired_effect.get("k") == 1
+
+
+def test_information_algebra_reuses_matching_factor_ids(monkeypatch):
+    from src.engine.causal.algebra import do_presence
+    from src.engine.causal import dynamics as dyn
+
+    cfg = _short_cfg(max_rounds=6)
+    factual = run_factual(cfg)
+    rec = factual.events[-1]
+    eid = str(rec["event_id"])
+    rnd = int(rec["round"])
+    fid = do_presence(rnd, eid).factor_id()
+    calls: list[str] = []
+    real_twin = dyn.run_twin
+
+    def spy(base, ops, llm_trace=None):
+        calls.append(ops[0].factor_id() if ops else "NOOP")
+        return real_twin(base, ops, llm_trace=llm_trace)
+
+    monkeypatch.setattr(dyn, "run_twin", spy)
+    result = dyn.information_algebra(
+        cfg,
+        factual,
+        "protest_authorship",
+        event_id=eid,
+        round_num=rnd,
+        prior_effects={
+            fid: {
+                "ate": -0.42,
+                "fork": {"identical": False, "round": rnd, "channel": "event"},
+                "split": {"public_private_divergence_mean": 0.1},
+            }
+        },
+    )
+    assert result["worlds"]["do_presence"]["reused"] is True
+    assert result["worlds"]["do_presence"]["ate"] == -0.42
+    assert fid not in calls
+    assert result["reused"] >= 1
 
 
 def test_llm_trace_replays_failures_without_recalling_inner():

@@ -125,6 +125,19 @@ EVENT_TYPE_REGISTRY: dict[str, EventTypeSpec] = {
         default_memory_salience=0.75,
         typical_content_types=("historical_pattern",),
     ),
+    "bridge_closed": EventTypeSpec("bridge_closed", "桥关闭", default_memory_salience=0.9, typical_content_types=("authority_signal",)),
+    "sensor_report": EventTypeSpec("sensor_report", "传感器报告", default_memory_salience=0.8),
+    "citizen_report": EventTypeSpec("citizen_report", "市民报告", default_visibility="public", default_memory_salience=0.7),
+    "dispatch_brief": EventTypeSpec("dispatch_brief", "调度简报", default_memory_salience=0.75),
+    "hospital_capacity": EventTypeSpec("hospital_capacity", "医院容量", default_memory_salience=0.55),
+    "traffic_jam": EventTypeSpec("traffic_jam", "交通拥堵", default_memory_salience=0.6),
+    "evac_order": EventTypeSpec("evac_order", "撤离命令", default_memory_salience=0.85),
+    "stale_config": EventTypeSpec("stale_config", "过期配置", default_memory_salience=0.8, typical_content_types=("integrity_signal",)),
+    "test_skipped": EventTypeSpec("test_skipped", "跳过测试", default_memory_salience=0.75),
+    "alert": EventTypeSpec("alert", "生产告警", default_memory_salience=0.85),
+    "rollback": EventTypeSpec("rollback", "回滚", default_memory_salience=0.8),
+    "deploy_failure": EventTypeSpec("deploy_failure", "部署失败", default_memory_salience=0.9),
+    "outage": EventTypeSpec("outage", "中断", default_visibility="public", default_memory_salience=0.9),
 }
 
 

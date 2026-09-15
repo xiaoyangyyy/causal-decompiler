@@ -1,0 +1,48 @@
+world:
+  days_per_round: 1
+  total_rounds: 16
+  total_days: 16
+  target_conference: ReleaseOps
+internal_agents:
+- product
+- developer
+- code_reviewer
+- tester
+- deployer
+- monitor
+external_agents: []
+mandatory_anchor_events:
+- E003
+- E006
+- E009
+- E011
+- E013
+initial_project:
+  idea_clarity: 0.4
+  experimental_strength: 0.3
+  code_stability: 0.4
+  writing_quality: 0.2
+  novelty_risk: 0.3
+  baseline_coverage: 0.3
+  deadline_pressure: 0.55
+  rival_threat: 0.2
+  funding_pressure: 0.25
+  authorship_conflict: 0.1
+  team_morale: 0.65
+  integrity_risk: 0.15
+initial_contribution_ledger:
+  idea:
+    product: 0.7
+    developer: 0.3
+  experiments:
+    tester: 1.0
+  writing:
+    product: 1.0
+  data:
+    monitor: 1.0
+  supervision:
+    product: 0.6
+    code_reviewer: 0.4
+scenario: releaseops
+primary_outcome: task_y
+topology: workflow_dag

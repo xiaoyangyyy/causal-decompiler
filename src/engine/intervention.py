@@ -79,6 +79,10 @@ def apply_event_override(
             ev.framing = value
         elif key == "type":
             ev.type = value
+        elif key == "visibility":
+            ev.visibility = value
+        elif key == "targets":
+            ev.targets = list(value)
         elif key == "memory_salience":
             ev.memory_salience = float(value)
         elif key.startswith("payload."):

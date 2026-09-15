@@ -1,0 +1,286 @@
+events:
+- event_id: E001
+  round: 1
+  type: team_meeting
+  visibility: team
+  source: product
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: team_meeting
+    verifiable_claims:
+    - team_meeting
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: team_meeting
+- event_id: E002
+  round: 2
+  type: stale_config
+  visibility: team
+  source: developer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: stale_config
+    verifiable_claims:
+    - stale_config
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: stale_config
+- event_id: E003
+  round: 3
+  type: stale_config
+  visibility: team
+  source: developer
+  targets:
+  - tester
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: stale config merged
+    verifiable_claims:
+    - stale_config
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: stale config merged
+- event_id: E004
+  round: 4
+  type: alert
+  visibility: team
+  source: monitor
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: alert
+    verifiable_claims:
+    - alert
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: alert
+- event_id: E005
+  round: 5
+  type: rollback
+  visibility: team
+  source: deployer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: rollback
+    verifiable_claims:
+    - rollback
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: rollback
+- event_id: E006
+  round: 6
+  type: test_skipped
+  visibility: bilateral
+  source: tester
+  targets:
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: regression skipped
+    verifiable_claims:
+    - test_skipped
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: regression skipped
+- event_id: E007
+  round: 7
+  type: team_meeting
+  visibility: team
+  source: product
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: team_meeting
+    verifiable_claims:
+    - team_meeting
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: team_meeting
+- event_id: E008
+  round: 8
+  type: stale_config
+  visibility: team
+  source: developer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: stale_config
+    verifiable_claims:
+    - stale_config
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: stale_config
+- event_id: E009
+  round: 9
+  type: deploy_failure
+  visibility: team
+  source: deployer
+  targets:
+  - monitor
+  - product
+  payload: {}
+  objective_fact:
+    raw_statement: AND fault fires
+    verifiable_claims:
+    - deploy_failure
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: AND fault fires
+- event_id: E010
+  round: 10
+  type: alert
+  visibility: team
+  source: monitor
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: alert
+    verifiable_claims:
+    - alert
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: alert
+- event_id: E011
+  round: 11
+  type: alert
+  visibility: team
+  source: monitor
+  targets:
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: alert can suppress outage
+    verifiable_claims:
+    - alert
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: alert can suppress outage
+- event_id: E012
+  round: 12
+  type: deploy_failure
+  visibility: team
+  source: deployer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: deploy_failure
+    verifiable_claims:
+    - deploy_failure
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: deploy_failure
+- event_id: E013
+  round: 13
+  type: rollback
+  visibility: team
+  source: deployer
+  targets:
+  - product
+  payload: {}
+  objective_fact:
+    raw_statement: rollback suppressor
+    verifiable_claims:
+    - rollback
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: rollback suppressor
+- event_id: E014
+  round: 14
+  type: stale_config
+  visibility: team
+  source: developer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: stale_config
+    verifiable_claims:
+    - stale_config
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: stale_config
+- event_id: E015
+  round: 15
+  type: test_skipped
+  visibility: team
+  source: tester
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: test_skipped
+    verifiable_claims:
+    - test_skipped
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: test_skipped
+- event_id: E016
+  round: 16
+  type: alert
+  visibility: team
+  source: monitor
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: alert
+    verifiable_claims:
+    - alert
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: alert

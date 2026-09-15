@@ -53,7 +53,20 @@
         "threat_withdraw",
         "narrative_change",
         "integrity_dispute",
-        "external_history"
+        "external_history",
+        "bridge_closed",
+        "sensor_report",
+        "citizen_report",
+        "dispatch_brief",
+        "hospital_capacity",
+        "traffic_jam",
+        "evac_order",
+        "stale_config",
+        "test_skipped",
+        "alert",
+        "rollback",
+        "deploy_failure",
+        "outage"
       ]
     },
     "visibility": {

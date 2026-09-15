@@ -357,17 +357,23 @@ class OllamaAdapter(LLMAdapter):
                 {"role": "user", "content": user},
             ],
         }).encode("utf-8")
-        req = self._urllib.Request(
-            f"{self.base_url}/api/chat",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with self._urllib.urlopen(req, timeout=120) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-        except self._urllib_error.URLError as exc:
-            raise LLMError(f"Ollama request failed: {exc}") from exc
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            req = self._urllib.Request(
+                f"{self.base_url}/api/chat",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with self._urllib.urlopen(req, timeout=300) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                break
+            except (TimeoutError, self._urllib_error.URLError) as exc:
+                last_exc = exc
+                time.sleep(2.0 * (attempt + 1))
+        else:
+            raise LLMError(f"Ollama request failed: {last_exc}") from last_exc
         content = data.get("message", {}).get("content", "{}")
         return _parse_json_content(content)
 

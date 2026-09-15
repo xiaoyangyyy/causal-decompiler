@@ -77,6 +77,7 @@ python -m src.experiments report -e A -c A2 --seed 42
 | [docs/11-Agent-Social-State-Model.md](docs/11-Agent-Social-State-Model.md) | Agent Social State |
 | [docs/15-Theory-Grounded-Agent-Variables.md](docs/15-Theory-Grounded-Agent-Variables.md) | 变量的社会科学锚点 |
 | [docs/18-Causal-Decompiler-Paper-Protocol.md](docs/18-Causal-Decompiler-Paper-Protocol.md) | **论文实验协议（主入口）** |
+| [docs/19-Causal-Decompiler-Audit.md](docs/19-Causal-Decompiler-Audit.md) | **实验 1–5 与机制审计归档** |
 
 ## 项目结构
 

@@ -39,6 +39,14 @@ class LLMTrace:
     def snapshot_hits_misses(self) -> tuple[int, int]:
         return self.hits, self.misses
 
+    def copy(self, *, reset_counters: bool = True) -> "LLMTrace":
+        return LLMTrace(
+            by_key=copy.deepcopy(self.by_key),
+            errors=dict(self.errors),
+            hits=0 if reset_counters else self.hits,
+            misses=0 if reset_counters else self.misses,
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "by_key": copy.deepcopy(self.by_key),

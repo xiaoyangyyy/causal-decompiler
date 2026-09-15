@@ -36,6 +36,13 @@ def test_jsonl_roundtrip_restores_events_noise_and_llm_trace(tmp_path):
     assert loaded.llm_cache is not None
     assert loaded.llm_cache.by_key["abc123"]["action"] == "comply"
     assert loaded.llm_cache.errors["def456"] == "parse failed"
+    assert loaded.llm_cache_frozen is not None
+    assert "abc123" in loaded.llm_cache_frozen.by_key
+    loaded.llm_cache.by_key["twin-miss"] = {"ok": False}
+    loaded.write_jsonl(path)
+    reloaded = RunLog.from_jsonl(path)
+    assert "twin-miss" not in reloaded.llm_cache.by_key
+    assert reloaded.llm_cache.by_key["abc123"]["action"] == "comply"
     assert loaded.outcomes["trust_pi_logged"] == 0.62
     assert loaded.outcomes["trust_pi_final"] == 0.62
     assert loaded.outcomes["public_private_divergence_mean"] == 0.51

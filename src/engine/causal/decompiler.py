@@ -10,6 +10,14 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from src.engine.causal.algebra import CausalOp
+from src.engine.causal.certificate import certificates_from_report
+from src.engine.causal.dynamics import (
+    assemble_surface,
+    distributional_k,
+    index_prior_effects,
+    layer_interventions,
+    paired_replicates,
+)
 from src.engine.causal.estimands import (
     EffectEstimate,
     and_event_ids,
@@ -26,9 +34,21 @@ from src.engine.causal.estimands import (
     story_shapley,
     three_worlds,
 )
+from src.engine.causal.ir import extract_ir
+from src.engine.causal.search import (
+    candidates_for_outcome,
+    causal_hypergraph,
+    classify_compliance_regime,
+    harsanyi_from_shapley,
+    minimal_effect_recovery_set,
+    paper_top_k,
+    run_bidirectional_search,
+    run_hierarchical_search,
+    slice_compression,
+)
 from src.engine.causal.toy import contrastive_leave_one_out, exact_shapley, planted_factors, planted_outcome
 from src.engine.causal.twin import identity_holds, run_factual, run_twin, sim_config_from_log
-from src.engine.run_log import RunLog, extract_outcome
+from src.engine.run_log import RunLog, extract_outcome, three_channel_y
 from src.engine.simulation import SimConfig
 
 
@@ -54,6 +74,24 @@ class CausalMRIReport:
     llm_replay: dict[str, Any] = field(default_factory=dict)
     factual_run_id: str = ""
     notes: list[str] = field(default_factory=list)
+    social_ir: dict[str, Any] = field(default_factory=dict)
+    candidates: list[dict[str, Any]] = field(default_factory=list)
+    minimal_cause: dict[str, Any] = field(default_factory=dict)
+    interaction: dict[str, Any] = field(default_factory=dict)
+    compliance_regime: dict[str, Any] = field(default_factory=dict)
+    certificates: list[dict[str, Any]] = field(default_factory=list)
+    memory_irf_surface: dict[str, Any] = field(default_factory=dict)
+    cpg: dict[str, Any] = field(default_factory=dict)
+    information_algebra: dict[str, Any] = field(default_factory=dict)
+    hierarchical_search: dict[str, Any] = field(default_factory=dict)
+    hypergraph: dict[str, Any] = field(default_factory=dict)
+    planted_worlds: dict[str, Any] = field(default_factory=dict)
+    paired_effect: dict[str, Any] = field(default_factory=dict)
+    layer_interventions: dict[str, Any] = field(default_factory=dict)
+    bidirectional_search: dict[str, Any] = field(default_factory=dict)
+    slice_stats: dict[str, Any] = field(default_factory=dict)
+    cstar_sensitivity: dict[str, Any] = field(default_factory=dict)
+    channels: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,8 +146,18 @@ def _split_ate(item: dict[str, Any], key: str) -> float:
     return float((split.get(key) or {}).get("ate") or 0.0)
 
 
+def _report_scenario(report: CausalMRIReport) -> str:
+    channels = report.channels or {}
+    if "stranded" in channels or "evac_delay" in channels:
+        return "crisisgrid"
+    if "task_y" in channels or "deploy_failure" in channels:
+        return "releaseops"
+    return "labwars"
+
+
 def _findings(report: CausalMRIReport) -> list[str]:
     lines: list[str] = []
+    labwars = _report_scenario(report) == "labwars"
     if report.identity_twin_ok:
         lines.append("Identity twin reproduced the factual trajectory under frozen U and LLM replay.")
     else:
@@ -121,28 +169,28 @@ def _findings(report: CausalMRIReport) -> list[str]:
     comply = float(split.get("post_r52_compliance", 0.0) or 0.0)
     trust_logged = float(split.get("trust_pi_logged", 0.0) or 0.0)
     trust_path = float(split.get("trust_pi_path_mean", 0.0) or 0.0)
-    if trust_logged <= 0.061 and trust_path <= 0.10:
+    if labwars and trust_logged <= 0.061 and trust_path <= 0.10:
         lines.append(
             f"Trust channel is pinned near the recovery floor "
             f"(logged={trust_logged:.3f}, path_mean={trust_path:.3f}); "
             "ATEs on trust_pi_logged are not identified."
         )
-    elif trust_path > 0.12:
+    elif labwars and trust_path > 0.12:
         lines.append(
             f"Trust path-mean ({trust_path:.3f}) is above the floor — "
             "do(M)/skip can move the private relationship channel."
         )
-    if protest < 0.05 and potential > 0.08:
+    if labwars and protest < 0.05 and potential > 0.08:
         lines.append(
             f"Public protest ({protest:.3f}) is action-gated; latent authorship potential "
             f"({potential:.3f}) is the live MRI channel."
         )
-    if ppd > 0.15 and protest < 0.05:
+    if labwars and ppd > 0.15 and protest < 0.05:
         lines.append(
             f"Split-Y: private divergence ({ppd:.3f}) is large while public protest ({protest:.3f}) stays compressed — "
             "the hidden transcript is the estimand, not the binary revolt."
         )
-    if comply > 0.5 and ppd > 0.2:
+    if labwars and comply > 0.5 and ppd > 0.2:
         lines.append("Public compliance coexists with private divergence (hypocrisy / dual transcript).")
     shapley = report.story_shapley or {}
     if shapley.get("and_lie"):
@@ -150,6 +198,43 @@ def _findings(report: CausalMRIReport) -> list[str]:
             "Contrastive skip overcounts AND causes "
             f"(sum={float(shapley.get('contrastive_sum', 0)):.3f} vs total={float(shapley.get('total_effect', 0)):.3f}); "
             "Shapley splits the joint effect."
+        )
+    ir = report.social_ir or {}
+    if ir.get("node_count"):
+        by_type = ir.get("by_type") or {}
+        lines.append(
+            f"Social Causal IR: {ir.get('node_count')} nodes / {ir.get('edge_count')} edges "
+            f"({', '.join(f'{k}={v}' for k, v in sorted(by_type.items()))})."
+        )
+    if report.candidates:
+        types = sorted({str(c.get('type')) for c in report.candidates})
+        lines.append(
+            f"Auto-search traced {len(report.candidates)} provenance candidates "
+            f"({', '.join(types)}) instead of a hand-picked event list."
+        )
+    interaction = report.interaction or {}
+    if interaction.get("kind") in {"synergy", "redundant", "independent"}:
+        factors = interaction.get("factors") or []
+        lines.append(
+            f"Harsanyi I({','.join(str(f) for f in factors)})="
+            f"{float(interaction.get('index') or 0.0):+.3f} ({interaction.get('kind')})."
+        )
+    min_cause = report.minimal_cause or {}
+    if min_cause.get("set"):
+        lines.append(
+            "Minimal sufficient set: {"
+            + ", ".join(str(x) for x in min_cause.get("set") or [])
+            + "} — "
+            + str(min_cause.get("reason") or "evaluated ops")
+            + "."
+        )
+    regime = report.compliance_regime or {}
+    if regime.get("label"):
+        lines.append(
+            f"Public/private/action regime: {regime.get('label')} "
+            f"(private={float(regime.get('private') or 0):.3f}, "
+            f"public={float(regime.get('public') or 0):.3f}, "
+            f"action={float(regime.get('action') or 0):.3f})."
         )
     irf = report.memory_irf or []
     if len(irf) >= 2:
@@ -171,6 +256,8 @@ def _findings(report: CausalMRIReport) -> list[str]:
             f"Largest memory-IRF move: {best.get('factor_id')} ATE={float(best.get('ate', 0.0)):+.4f}."
         )
         for item in irf:
+            if not labwars:
+                break
             d_pub = _split_ate(item, "protest_authorship")
             d_pot = _split_ate(item, "authorship_escalation_potential")
             d_ppd = _split_ate(item, "public_private_divergence_mean")
@@ -192,9 +279,10 @@ def _findings(report: CausalMRIReport) -> list[str]:
             continue
         if fork.get("identical"):
             continue
+        kind = fork.get("fork_kind") or fork.get("channel")
         lines.append(
-            f"Fork: {fork.get('factor_id')} first leaves the factual transcript at "
-            f"R{fork.get('round')} ({fork.get('agent')}) on the {fork.get('channel')} channel."
+            f"Fork: {fork.get('factor_id')} first meaningful leave at "
+            f"R{fork.get('round')} ({fork.get('agent')}) on the {kind} channel."
         )
         break
     worlds = report.three_worlds or {}
@@ -205,7 +293,7 @@ def _findings(report: CausalMRIReport) -> list[str]:
         )
     toy = report.shapley_toy or {}
     lie = report.contrastive_toy_lie or {}
-    if toy and lie:
+    if labwars and toy and lie:
         lines.append(
             "Planted AND oracle: Shapley "
             + ", ".join(f"{k}={v:.2f}" for k, v in toy.items())
@@ -213,6 +301,32 @@ def _findings(report: CausalMRIReport) -> list[str]:
             + ", ".join(f"{k}={v:.0f}" for k, v in lie.items())
             + "."
         )
+    minc = report.minimal_cause or {}
+    if minc.get("set"):
+        alpha = minc.get("alpha", 0.9)
+        lines.append(
+            f"Minimal Effect-Recovery Set C*_α={alpha}: "
+            + ", ".join(str(x) for x in minc.get("set") or [])
+            + f" ({minc.get('reason') or ''})."
+        )
+    channels = report.channels or {}
+    if channels:
+        lines.append(
+            f"Three-channel Y: private={float(channels.get('y_private') or 0):.3f}, "
+            f"public={float(channels.get('y_public') or 0):.3f}, "
+            f"action={float(channels.get('y_action') or 0):.3f}; "
+            f"PPG={float(channels.get('ppg') or 0):+.3f}, PCI={float(channels.get('pci') or 0):+.3f}."
+        )
+    slice_stats = report.slice_stats or {}
+    if slice_stats.get("graph_nodes"):
+        lines.append(
+            f"Slice compression: {slice_stats.get('graph_nodes')} graph nodes → "
+            f"{slice_stats.get('ancestors')} ancestors → Top-{slice_stats.get('top_k')}."
+        )
+    layers = (report.layer_interventions or {}).get("worlds") or {}
+    if layers:
+        bits = ", ".join(f"{k}={float((v or {}).get('ate') or 0):+.3f}" for k, v in layers.items())
+        lines.append(f"Layer interventions: {bits}.")
     return lines
 
 
@@ -278,13 +392,17 @@ class CausalDecompiler:
         include_three_worlds: bool | None,
         include_lambda: bool,
     ) -> CausalMRIReport:
+        if factual.llm_cache is not None:
+            factual.freeze_llm_cache()
         twin0 = run_twin(config, [], llm_trace=factual.llm_cache)
         notes = [
             "Abduction is event-keyed NoiseLog, not a global PRNG queue.",
             "LLM outputs are record-replayed from the factual prompt cache.",
             "Memory IRF is an interventional analogue, not a natural indirect effect.",
-            "Contrastive skip lies on AND causes (E003 × E052); Shapley on the planted SCM is the oracle.",
-            "Split-Y is the paper estimand: public compliance and private divergence are not the same Y.",
+            "Search is bidirectional on Top-k; C*_α is the Minimal Effect-Recovery Set.",
+            "Paper interventions are layer-specific: do_event / do_visibility / do_memory / do_behavior.",
+            "Social Causal IR is five layers (E,I,S,B,Y); institution is context, not a layer.",
+            "Reported forks are earliest meaningful (semantic/behavioral), not string mismatch.",
         ]
         report = CausalMRIReport(
             outcome=outcome,
@@ -292,7 +410,8 @@ class CausalDecompiler:
             split_y=split_y(factual),
             identity_twin_ok=identity_holds(factual, twin0),
             notes=notes,
-            forks=[_fork_entry("identity", "NOOP", first_divergence(factual, twin0))],
+            forks=[_fork_entry("identity", "NOOP", first_divergence(factual, twin0, outcome=outcome))],
+            channels=three_channel_y(factual),
         )
         if not report.identity_twin_ok:
             report.notes.append("FAIL: no-op twin diverged from factual run.")
@@ -303,7 +422,7 @@ class CausalDecompiler:
         for op in extra_ops or []:
             twin = run_twin(config, [op], llm_trace=factual.llm_cache)
             effect = paired_effect(factual, twin, outcome, name=op.kind, factor_id=op.factor_id())
-            effect.extras["fork"] = first_divergence(factual, twin)
+            effect.extras["fork"] = first_divergence(factual, twin, outcome=outcome)
             report.total_effects.append(asdict(effect))
             report.split_effects.append({
                 "factor_id": op.factor_id(),
@@ -339,7 +458,7 @@ class CausalDecompiler:
         if want_shapley:
             report.story_shapley = story_shapley(config, factual, and_event_ids(factual), outcome)
 
-        want_worlds = include_three_worlds if include_three_worlds is not None else auto_battery
+        want_worlds = include_three_worlds if include_three_worlds is not None else False
         if want_worlds:
             op = draft_beat_op(factual)
             if op is not None:
@@ -351,7 +470,7 @@ class CausalDecompiler:
         if include_lambda:
             report.lambda_effects = _dump_effects(lambda_lesion_effects(config, factual, outcome))
 
-        if include_toy_shapley:
+        if include_toy_shapley and str(getattr(config, "scenario", None) or "labwars") == "labwars":
             factors = planted_factors()
             report.shapley_toy = exact_shapley(planted_outcome, factors)
             report.contrastive_toy_lie = contrastive_leave_one_out(factors, factors)
@@ -359,14 +478,105 @@ class CausalDecompiler:
                 "Planted AND: factual knockout credits 1+1 (overcount); Shapley splits 0.5/0.5/0."
             )
 
+        report.factual_run_id = factual.run_id
+        ir = extract_ir(factual)
+        report.social_ir = ir.summary()
+        top_k = paper_top_k(config)
+        report.candidates = candidates_for_outcome(ir, outcome, limit=max(24, top_k))
+        report.slice_stats = slice_compression(ir, report.candidates, top_k)
+        if auto_battery:
+            k = distributional_k(config)
+            prior = index_prior_effects(report.contrastive, report.memory_irf, report.total_effects)
+            report.hierarchical_search = run_hierarchical_search(
+                config,
+                factual,
+                ir,
+                outcome,
+                budget=5,
+                prior_effects=prior,
+                new_twin_budget=None if k >= 3 else 2,
+            )
+            prior = index_prior_effects(
+                report.contrastive,
+                report.memory_irf,
+                report.total_effects,
+                report.hierarchical_search.get("evaluated"),
+            )
+            report.bidirectional_search = run_bidirectional_search(
+                config,
+                factual,
+                ir,
+                outcome,
+                top_k=top_k,
+                prior_effects=prior,
+                new_twin_budget=None if k >= 3 else max(2, top_k),
+            )
+            prior = index_prior_effects(
+                report.contrastive,
+                report.memory_irf,
+                report.total_effects,
+                report.hierarchical_search.get("evaluated"),
+                report.bidirectional_search.get("deletion"),
+            )
+            report.layer_interventions = layer_interventions(
+                config, factual, outcome, prior_effects=prior,
+            )
+            op = draft_beat_op(factual)
+            if k >= 3 and op is not None:
+                report.paired_effect = paired_replicates(
+                    config, factual, [op], outcome, k=k, factor_id=op.factor_id(),
+                )
+                report.notes.append(
+                    "Full battery: ancestor slice, bidirectional Top-k search, four layer dos, K=3 paired replicates."
+                )
+            else:
+                skip = (report.contrastive or [None])[0] or {}
+                mean = skip.get("ate")
+                report.paired_effect = {
+                    "name": "individual_paired_causal_effect",
+                    "factor_id": skip.get("factor_id") or (op.factor_id() if op is not None else None),
+                    "k": 1,
+                    "mean": mean,
+                    "paired_mean_difference": mean,
+                    "samples": [mean] if mean is not None else [],
+                    "notes": (
+                        "Deterministic identity/CRN replay (k=1). "
+                        "Distributional K=3 is for scripted or short runs."
+                    ),
+                    "model": str(config.llm_provider or "scripted"),
+                    "seed": int(config.seed),
+                }
+                report.notes.append(
+                    "Bidirectional search and layer interventions reuse existing twins; K=1 CRN."
+                )
+        else:
+            report.paired_effect = {
+                "name": "individual_paired_causal_effect",
+                "k": 1,
+                "notes": "Deterministic identity/CRN replay. Distributional K is for scripted or short runs.",
+            }
+        report.interaction = harsanyi_from_shapley(report.story_shapley)
+        report.minimal_cause = minimal_effect_recovery_set(report.to_dict())
+        report.cstar_sensitivity = dict((report.minimal_cause or {}).get("sensitivity") or {})
+        report.compliance_regime = classify_compliance_regime(report.split_y, report.channels)
+        report.hypergraph = causal_hypergraph(report.interaction, report.minimal_cause, report.compliance_regime)
+        report.memory_irf_surface = assemble_surface(report.memory_irf)
+        if report.layer_interventions.get("worlds"):
+            worlds = report.layer_interventions["worlds"]
+            report.cpg = (next(iter(worlds.values()), {}) or {}).get("cpg") or {}
+            if not report.cpg and report.memory_irf:
+                report.cpg = (report.memory_irf[0].get("extras") or {}).get("cpg") or {}
+        elif report.memory_irf:
+            report.cpg = (report.memory_irf[0].get("extras") or {}).get("cpg") or {}
+
         from src.engine.probe import ProbeAgent
 
-        report.factual_run_id = factual.run_id
         report.llm_replay = {
             "identity_run_hits": twin_stats.get("run_hits", 0),
             "identity_run_misses": twin_stats.get("run_misses", 0),
             "cache": factual.outcomes.get("llm_trace_stats") or {},
         }
+        report.certificates = certificates_from_report(report.to_dict())
         report.findings = _findings(report)
         report.probes = ProbeAgent().suggest_from_mri(report)
         factual.outcomes["causal_mri"] = report.to_dict()

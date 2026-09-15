@@ -22,6 +22,39 @@ from .models import (
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR = PROJECT_ROOT / "schemas"
 CONFIG_DIR = PROJECT_ROOT / "config"
+SCENARIOS_DIR = CONFIG_DIR / "scenarios"
+
+
+def scenario_config_dir(scenario: str | None = None) -> Path:
+    name = str(scenario or "labwars")
+    pack = SCENARIOS_DIR / name
+    if (pack / "world.yaml").exists():
+        return pack
+    return CONFIG_DIR
+
+
+def load_world_config(scenario: str | None = None) -> dict[str, Any]:
+    cfg = _load_yaml(scenario_config_dir(scenario) / "world.yaml")
+    cfg.setdefault("scenario", scenario or "labwars")
+    return cfg
+
+
+def load_agents(scenario: str | None = None) -> list[Agent]:
+    data = _load_yaml(scenario_config_dir(scenario) / "agents" / "profiles.yaml")
+    agents: list[Agent] = []
+    for raw in data["agents"]:
+        validate_against_schema(raw, "agent.schema.json")
+        agents.append(Agent.model_validate(raw))
+    return agents
+
+
+def load_events(scenario: str | None = None) -> list[EventAtom]:
+    data = _load_yaml(scenario_config_dir(scenario) / "events" / "anchors.yaml")
+    events: list[EventAtom] = []
+    for raw in data["events"]:
+        validate_against_schema(raw, "event.schema.json")
+        events.append(EventAtom.model_validate(raw))
+    return events
 
 
 def _load_yaml(path: Path) -> Any:
@@ -42,28 +75,6 @@ def _schema_validator(name: str) -> Draft202012Validator:
 def validate_against_schema(instance: dict[str, Any], schema_name: str) -> None:
     validator = _schema_validator(schema_name)
     validator.validate(instance)
-
-
-def load_world_config() -> dict[str, Any]:
-    return _load_yaml(CONFIG_DIR / "world.yaml")
-
-
-def load_agents() -> list[Agent]:
-    data = _load_yaml(CONFIG_DIR / "agents" / "profiles.yaml")
-    agents: list[Agent] = []
-    for raw in data["agents"]:
-        validate_against_schema(raw, "agent.schema.json")
-        agents.append(Agent.model_validate(raw))
-    return agents
-
-
-def load_events() -> list[EventAtom]:
-    data = _load_yaml(CONFIG_DIR / "events" / "anchors.yaml")
-    events: list[EventAtom] = []
-    for raw in data["events"]:
-        validate_against_schema(raw, "event.schema.json")
-        events.append(EventAtom.model_validate(raw))
-    return events
 
 
 def _default_edge(source: str, target: str) -> RelationshipEdge:
@@ -135,9 +146,9 @@ def load_initial_project(world_cfg: dict[str, Any]) -> ProjectState:
     )
 
 
-def load_world() -> WorldState:
-    world_cfg = load_world_config()
-    agents = load_agents()
+def load_world(scenario: str | None = None) -> WorldState:
+    world_cfg = load_world_config(scenario)
+    agents = load_agents(scenario)
     internal = world_cfg["internal_agents"]
     relationships = build_initial_relationships(internal)
     project = load_initial_project(world_cfg)
@@ -150,7 +161,7 @@ def load_world() -> WorldState:
     )
 
 
-def validate_events_schedule(events: list[EventAtom]) -> list[str]:
+def validate_events_schedule(events: list[EventAtom], scenario: str | None = None) -> list[str]:
     """Return list of validation errors (empty if valid)."""
     errors: list[str] = []
     seen_ids: set[str] = set()
@@ -165,21 +176,16 @@ def validate_events_schedule(events: list[EventAtom]) -> list[str]:
             errors.append(f"Round not monotonic at {event.event_id}: {event.round} < {prev_round}")
         prev_round = event.round
 
-    world_cfg = load_world_config()
+    world_cfg = load_world_config(scenario)
     mandatory = set(world_cfg["mandatory_anchor_events"])
     anchor_ids = {e.event_id for e in events if e.is_anchor}
     missing = mandatory - anchor_ids
     if missing:
         errors.append(f"Missing mandatory anchors: {sorted(missing)}")
 
-    extra_anchors = anchor_ids - mandatory
-    # Allow E053 etc. as non-mandatory anchors; only warn on unexpected
-    for eid in extra_anchors - mandatory:
-        if eid not in mandatory:
-            pass  # non-mandatory anchors OK
-
-    if len(events) != 60:
-        errors.append(f"Expected 60 events, got {len(events)}")
+    expected = int(world_cfg.get("world", {}).get("total_rounds") or 60)
+    if len(events) != expected:
+        errors.append(f"Expected {expected} events, got {len(events)}")
 
     return errors
 

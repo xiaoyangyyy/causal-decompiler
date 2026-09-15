@@ -1,8 +1,8 @@
-﻿"""Tests for memory reconsolidation."""
+"""Tests for memory reconsolidation."""
 
 from __future__ import annotations
 
-from src.cognition.memory import RecallResult, reconsolidate_memories
+from src.cognition.memory import RecallResult, _stable_unit, reconsolidate_memories
 from src.world.loader import load_events, load_world
 
 
@@ -36,3 +36,25 @@ def test_reconsolidation_rewrites_old_memory_continuously():
     assert agent.memory[0]["valence"] < 0.65
     assert agent.memory[0]["strength"] > 0.50
     assert agent.memory[0]["reconsolidation_history"][0]["event_ref"] == event.event_id
+
+
+def test_recall_embedding_is_stable_across_hash_seed(monkeypatch):
+    def boom(*_args, **_kwargs):
+        raise AssertionError("builtin hash() is not process-stable")
+
+    monkeypatch.setattr("builtins.hash", boom)
+    from src.cognition.memory import _memory_vector, _stable_unit
+
+    assert _stable_unit("promise_broken") == _stable_unit("promise_broken")
+    assert 0.0 <= _stable_unit("phd_a") < 1.0
+    vec = _memory_vector(
+        {
+            "round": 3,
+            "strength": 0.5,
+            "valence": 0.1,
+            "content_type": "promise_fulfilled",
+            "target": "pi",
+        },
+        10,
+    )
+    assert len(vec) == 5

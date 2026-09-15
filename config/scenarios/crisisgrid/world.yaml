@@ -1,0 +1,49 @@
+world:
+  days_per_round: 1
+  total_rounds: 24
+  total_days: 24
+  target_conference: CrisisGrid
+internal_agents:
+- dispatcher
+- sensor_north
+- sensor_south
+- hospital
+- traffic
+- rescue
+external_agents: []
+mandatory_anchor_events:
+- E003
+- E008
+- E009
+- E012
+- E018
+initial_project:
+  idea_clarity: 0.4
+  experimental_strength: 0.3
+  code_stability: 0.4
+  writing_quality: 0.2
+  novelty_risk: 0.3
+  baseline_coverage: 0.3
+  deadline_pressure: 0.55
+  rival_threat: 0.2
+  funding_pressure: 0.25
+  authorship_conflict: 0.1
+  team_morale: 0.65
+  integrity_risk: 0.15
+initial_contribution_ledger:
+  idea:
+    dispatcher: 0.4
+    rescue: 0.6
+  experiments:
+    sensor_north: 0.5
+    sensor_south: 0.5
+  writing:
+    dispatcher: 1.0
+  data:
+    hospital: 0.5
+    traffic: 0.5
+  supervision:
+    dispatcher: 1.0
+scenario: crisisgrid
+primary_outcome: stranded
+topology: spatial_comm

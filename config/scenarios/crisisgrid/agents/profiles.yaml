@@ -1,0 +1,253 @@
+agents:
+- id: dispatcher
+  role: pi
+  display_name: Grid dispatcher
+  goals:
+  - minimize_evac_time
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: dispatcher
+    grid_cell: hub
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35
+- id: sensor_north
+  role: engineer
+  display_name: North sensor
+  goals:
+  - report_hazards
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: sensor
+    grid_cell: N
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35
+- id: sensor_south
+  role: engineer
+  display_name: South sensor
+  goals:
+  - report_hazards
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: sensor
+    grid_cell: S
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35
+- id: hospital
+  role: collaborator
+  display_name: Hospital
+  goals:
+  - absorb_casualties
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: hospital
+    grid_cell: E
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35
+- id: traffic
+  role: experimenter
+  display_name: Traffic control
+  goals:
+  - keep_corridors_open
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: traffic
+    grid_cell: W
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35
+- id: rescue
+  role: idea_originator
+  display_name: Rescue lead
+  goals:
+  - reroute_around_bridge
+  personality:
+    ambition: 0.55
+    cooperation: 0.6
+    risk_taking: 0.45
+    conflict_avoidance: 0.4
+    credit_sensitivity: 0.35
+    authority_dependence: 0.4
+    deceptiveness: 0.2
+    reciprocity: 0.55
+    resentment_sensitivity: 0.3
+  extra_traits:
+    scenario_role: rescue
+    grid_cell: C
+  beliefs:
+    pi_fairness: 0.55
+    project_publishability: 0.5
+    rival_lab_threat: 0.25
+    my_first_author_probability: 0.2
+    team_trust: 0.55
+    deadline_feasibility: 0.5
+    my_contribution_recognized: 0.5
+    others_are_free_riding: 0.3
+    academic_integrity_risk: 0.2
+  emotion:
+    confidence: 0.55
+    anxiety: 0.4
+    anger: 0.15
+    resentment: 0.15
+    guilt: 0.1
+    hope: 0.5
+    burnout: 0.25
+  resources:
+    code_control: 0.4
+    data_control: 0.4
+    writing_control: 0.3
+    pi_access: 0.4
+    external_network: 0.35

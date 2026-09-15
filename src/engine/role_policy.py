@@ -10,7 +10,7 @@ from src.cognition.memory import RecallResult
 from src.cognition.pressure_fields import compute_pressure_fields
 from src.cognition.social_potential import SOCIAL_POTENTIAL_DIMENSIONS, compute_social_potential
 from src.engine.action_selection import generate_action_candidates
-from src.engine.causal.noise import STREAM_ACTION_SAMPLE, keyed_uniform
+from src.engine.causal.noise import STREAM_ACTION_GUMBEL, keyed_gumbel
 from src.engine.diversity import (
     avoid_actions,
     filter_allowed_actions,
@@ -46,6 +46,14 @@ def _pick_target(agent: Agent, world: WorldState, event: EventAtom, suggested: s
     return "project"
 
 
+def _as_mapping(value: Any, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        return {"type": value.strip()}
+    return dict(fallback or {})
+
+
 def _normalize_action_response(
     raw: dict[str, Any],
     agent: Agent,
@@ -54,21 +62,26 @@ def _normalize_action_response(
     allowed: list[ActionType],
 ) -> dict[str, Any]:
     allowed_values = {a.value for a in allowed}
-    primary = raw.get("primary_action") or raw
+    raw = _as_mapping(raw)
+    primary = raw.get("primary_action")
+    primary = _as_mapping(primary, raw)
     atype = str(primary.get("type", ""))
     if atype not in allowed_values:
         atype = allowed[0].value
 
-    intensity = float(primary.get("intensity", 0.5))
+    intensity = float(primary.get("intensity", 0.5) or 0.5)
     intensity = max(0.0, min(1.0, intensity))
     target = _pick_target(agent, world, event, primary.get("target"))
 
-    comm = raw.get("communication_action") or {}
+    comm = _as_mapping(raw.get("communication_action"), {"type": "share_result"})
     comm_type = str(comm.get("type", "share_result"))
     comm_target = _pick_target(agent, world, event, comm.get("target"))
 
-    public = raw.get("public_position") or {"statement_type": "neutral", "authorship_claim": "any_authorship"}
-    private = raw.get("private_intent") or default_private_intent(agent, atype)
+    public = _as_mapping(
+        raw.get("public_position"),
+        {"statement_type": "neutral", "authorship_claim": "any_authorship"},
+    )
+    private = _as_mapping(raw.get("private_intent"), default_private_intent(agent, atype))
 
     return {
         "agent": agent.id,
@@ -97,15 +110,24 @@ def _softmax(values: list[float], temperature: float = 0.22) -> list[float]:
 
 
 def _sample_payload(payloads: list[dict[str, Any]], *, seed: int, round_num: int, agent_id: str) -> dict[str, Any]:
+    """A = argmax_a [log P(a|S) + G_{i,t,a}] with event-keyed shared Gumbel."""
     if not payloads:
         raise ValueError("No action payloads to sample")
-    needle = keyed_uniform(seed, round_num, STREAM_ACTION_SAMPLE, agent_id=agent_id, name="llm_fused")
-    total = 0.0
+    best = payloads[-1]
+    best_score = float("-inf")
     for payload in payloads:
-        total += float(payload.get("probability", 0.0))
-        if needle <= total:
-            return payload
-    return payloads[-1]
+        prob = max(1e-12, float(payload.get("probability") or 0.0))
+        gumbel = keyed_gumbel(
+            seed, round_num, STREAM_ACTION_GUMBEL,
+            agent_id=agent_id, name=str(payload.get("type") or "a"),
+        )
+        score = math.log(prob) + gumbel
+        payload["gumbel"] = gumbel
+        payload["gumbel_score"] = score
+        if score > best_score:
+            best_score = score
+            best = payload
+    return best
 
 
 _DRAFT_CREDIT_ACTIONS = frozenset({

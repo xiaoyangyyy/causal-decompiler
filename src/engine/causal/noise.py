@@ -9,6 +9,7 @@ control flow (Starsim / event-keyed CRN).
 from __future__ import annotations
 
 import hashlib
+import math
 import random
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ STREAM_EVENT_JITTER = "event_jitter"
 STREAM_EVENT_SAMPLE = "event_sample"
 STREAM_ACTION_JITTER = "action_jitter"
 STREAM_ACTION_SAMPLE = "action_sample"
+STREAM_ACTION_GUMBEL = "action_gumbel"
 STREAM_LLM_SCORE = "llm_score"
 STREAM_RUMOR = "rumor"
 STREAM_CRITIC = "critic"
@@ -108,6 +110,19 @@ def keyed_uniform(
             NoiseDraw(round=round_num, stream=stream, agent_id=agent_id, name=name, value=value)
         )
     return value
+
+
+def keyed_gumbel(
+    seed: int,
+    round_num: int,
+    stream: str,
+    agent_id: str | None = None,
+    name: str = "u",
+) -> float:
+    """Standard Gumbel(0,1) keyed like CRN uniforms. Shared G_{i,t,a} across twins."""
+    u = keyed_uniform(seed, round_num, stream, agent_id, name)
+    u = min(1.0 - 1e-12, max(1e-12, u))
+    return -math.log(-math.log(u))
 
 
 def keyed_uniform_centered(

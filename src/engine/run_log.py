@@ -43,6 +43,7 @@ class RunLog:
     interventions_applied: list[dict[str, Any]] = field(default_factory=list)
     noise_log: list[dict[str, Any]] = field(default_factory=list)
     llm_cache: Any | None = field(default=None, repr=False, compare=False)
+    llm_cache_frozen: Any | None = field(default=None, repr=False, compare=False)
     started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def record_event(self, event: EventAtom, intervention_id: str | None = None) -> None:
@@ -51,6 +52,9 @@ class RunLog:
             "round": event.round,
             "type": event.type,
             "source": event.source,
+            "visibility": event.visibility,
+            "targets": list(event.targets),
+            "framing": event.framing,
             "intervention_id": intervention_id,
             "payload": event.payload,
         })
@@ -100,8 +104,15 @@ class RunLog:
             f.write(json.dumps({"type": "outcomes", **self.outcomes}, ensure_ascii=False) + "\n")
         self.write_llm_trace(llm_trace_sidecar(path))
 
-    def write_llm_trace(self, path: Path) -> None:
+    def freeze_llm_cache(self) -> None:
+        """Snapshot the factual prompt cache so twin misses are not persisted."""
         cache = self.llm_cache
+        if cache is None or not hasattr(cache, "copy"):
+            return
+        self.llm_cache_frozen = cache.copy(reset_counters=False)
+
+    def write_llm_trace(self, path: Path) -> None:
+        cache = self.llm_cache_frozen or self.llm_cache
         if cache is None or not hasattr(cache, "to_dict"):
             return
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -183,6 +194,7 @@ class RunLog:
             from src.engine.causal.llm_trace import LLMTrace
 
             log.llm_cache = LLMTrace.from_dict(json.loads(sidecar.read_text(encoding="utf-8")))
+            log.freeze_llm_cache()
         rehydrate_outcomes(log)
         return log
 
@@ -207,6 +219,11 @@ SPLIT_Y_KEYS = (
     "trust_pi_logged",
     "trust_pi_path_mean",
     "pi_fairness_r52",
+    "y_private",
+    "y_public",
+    "y_action",
+    "ppg",
+    "pci",
 )
 
 EXTRACTABLE_OUTCOMES = (
@@ -226,6 +243,13 @@ EXTRACTABLE_OUTCOMES = (
     "trust_recovery_rate",
     "pi_fairness_r35",
     "interpretation_of_E030",
+    "evac_delay",
+    "stranded",
+    "resource_util",
+    "deploy_failure",
+    "rollback_time",
+    "outage",
+    "task_y",
 )
 
 
@@ -772,7 +796,23 @@ def extract_outcome(log: RunLog, outcome: str, cast: StoryCast | None = None) ->
         return 0.0 if logged is None else logged
     if outcome == "trust_pi_path_mean":
         return _trust_path_mean(log, idea, cast.pi, 1, draft)
+    if outcome in {"y_private", "y_public", "y_action", "ppg", "pci", "evac_delay", "stranded", "resource_util", "deploy_failure", "rollback_time", "outage", "task_y"}:
+        channels = three_channel_y(log, cast)
+        return float(channels.get(outcome, 0.0) or 0.0)
     return 0.0
+
+
+def three_channel_y(log: RunLog, cast: StoryCast | None = None) -> dict[str, float]:
+    from src.engine.outcomes import three_channel_y as _scenario_channels
+
+    scenario = str((log.config or {}).get("scenario") or "labwars")
+    if scenario in {"crisisgrid", "releaseops"}:
+        return _scenario_channels(log)
+    cast = cast or story_cast_from_log(log)
+    private = extract_outcome(log, "authorship_escalation_potential", cast)
+    public = extract_outcome(log, "protest_authorship", cast)
+    action = min(1.0, extract_outcome(log, "protest_action_count", cast) / 4.0)
+    return _scenario_channels(log, private=private, public=public, action=action)
 
 
 def _fill_extracted_outcomes(log: RunLog, cast: StoryCast) -> None:
@@ -820,6 +860,9 @@ def finalize_outcomes(log: RunLog, world_agents: dict | None = None, relationshi
     log.outcomes["memory_authorship_cluster_strength"] = cluster
     log.outcomes["memory_authorship_cluster_live"] = cluster
     _assign_trust_pi_final(log, cast, world_agents, relationships)
+    channels = three_channel_y(log, cast)
+    log.outcomes.update(channels)
+    log.outcomes["channels"] = dict(channels)
     log.outcomes["split_y"] = {key: float(log.outcomes.get(key, 0.0) or 0.0) for key in SPLIT_Y_KEYS}
 
 
@@ -842,6 +885,9 @@ def rehydrate_outcomes(log: RunLog) -> None:
         log.outcomes["trust_pi_logged"] = 0.0 if logged is None else logged
     if not log.outcomes.get("trust_pi_final"):
         log.outcomes["trust_pi_final"] = log.outcomes.get("trust_pi_logged", 0.0)
+    channels = three_channel_y(log)
+    log.outcomes.update({k: v for k, v in channels.items() if k not in log.outcomes or log.outcomes.get(k) in (None, "")})
+    log.outcomes["channels"] = dict(channels)
     log.outcomes["split_y"] = {key: float(log.outcomes.get(key, 0.0) or 0.0) for key in SPLIT_Y_KEYS}
 
 

@@ -14,9 +14,8 @@ venv/
 .env.*
 !.env.example
 
-# Experiment outputs (large jsonl runs)
-output/runs/
-output/reports/
+# Experiment outputs (large jsonl runs, local figures)
+output/
 
 # IDE / OS
 .vscode/

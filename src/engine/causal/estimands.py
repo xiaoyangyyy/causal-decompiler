@@ -16,11 +16,13 @@ from typing import Any
 from src.engine.causal.algebra import CausalOp, delete_memory, lesion, skip_event
 from src.engine.causal.toy import shapley_weight
 from src.engine.causal.twin import run_twin
+from src.engine.outcomes import CRISISGRID_REPORT_TYPES, scenario_of
 from src.engine.run_log import SPLIT_Y_KEYS, RunLog, extract_outcome
 from src.engine.simulation import SimConfig
 from src.engine.story_cast import story_cast_from_log
 
 AND_EVENT_IDS = ("E003", "E052")
+RELEASEOPS_FAULT_TYPES = frozenset({"stale_config", "test_skipped"})
 PAPER_SPLIT_KEYS = (
     "protest_authorship",
     "authorship_escalation_potential",
@@ -77,7 +79,10 @@ def memory_irf(
             key: {"ate": extract_outcome(twin, key) - extract_outcome(factual, key), "twin_y": extract_outcome(twin, key)}
             for key in PAPER_SPLIT_KEYS
         }
-        est.extras["fork"] = first_divergence(factual, twin)
+        est.extras["fork"] = first_divergence(factual, twin, outcome=outcome)
+        from src.engine.causal.dynamics import cpg_from_split, mirf_curve
+        est.extras["mirf"] = mirf_curve(factual, twin, outcome, t)
+        est.extras["cpg"] = cpg_from_split(split_y(factual), split_y(twin))
         estimates.append(est)
     return estimates
 
@@ -99,7 +104,7 @@ def contrastive_event_effects(
         est = paired_effect(
             factual, twin, outcome, name=f"skip[{event_id}]", factor_id=op.factor_id(),
         )
-        est.extras["fork"] = first_divergence(factual, twin)
+        est.extras["fork"] = first_divergence(factual, twin, outcome=outcome)
         estimates.append(est)
     return estimates
 
@@ -150,8 +155,24 @@ def default_memory_irf_rounds(log: RunLog) -> list[int]:
 
 
 def and_event_ids(log: RunLog) -> list[str]:
-    """Promise ∧ draft (E003 × E052). Short runs fall back to first+last events."""
-    present = {str(e.get("event_id")) for e in log.events if e.get("event_id")}
+    """LabWars: promise ∧ draft (E003 × E052). Packs use their own mechanism events."""
+    scenario = scenario_of(log)
+    ordered = [str(e.get("event_id")) for e in log.events if e.get("event_id")]
+    if scenario == "crisisgrid":
+        ids = [
+            str(e.get("event_id"))
+            for e in log.events
+            if e.get("event_id") and str(e.get("type") or "") in CRISISGRID_REPORT_TYPES
+        ]
+        return ids[:3]
+    if scenario == "releaseops":
+        ids = [
+            str(e.get("event_id"))
+            for e in log.events
+            if e.get("event_id") and str(e.get("type") or "") in RELEASEOPS_FAULT_TYPES
+        ]
+        return ids[:3]
+    present = set(ordered)
     ids = [eid for eid in AND_EVENT_IDS if eid in present]
     if len(ids) == 2:
         return ids
@@ -182,73 +203,15 @@ def draft_beat_op(log: RunLog) -> CausalOp | None:
     return None
 
 
-def _stance_key(payload: Any) -> tuple[str, ...]:
-    if not isinstance(payload, dict):
-        return (str(payload),)
-    return (
-        str(payload.get("statement_type") or ""),
-        str(payload.get("authorship_claim") or payload.get("goal") or ""),
-        str(payload.get("content_summary") or ""),
-    )
+def first_divergence(factual: RunLog, twin: RunLog, *, outcome: str = "protest_authorship") -> dict[str, Any]:
+    """First meaningful fork: action type / semantic stance / outcome.
 
-
-def _action_index(log: RunLog) -> dict[tuple[int, str], dict[str, Any]]:
-    out: dict[tuple[int, str], dict[str, Any]] = {}
-    for act in log.actions:
-        key = (int(act.get("round") or 0), str(act.get("agent") or ""))
-        out[key] = act
-    return out
-
-
-def first_divergence(factual: RunLog, twin: RunLog) -> dict[str, Any]:
-    """First round the twin leaves the factual transcript.
-
-    Channel order: missing action, selected action type, public stance, private intent.
-    Identity twins should return identical=True.
+    Lexical paraphrase is retained under extras['lexical'] and does not
+    count as a mechanism change. Identity twins still return identical=True.
     """
-    fact = _action_index(factual)
-    other = _action_index(twin)
-    for key in sorted(set(fact) | set(other)):
-        rnd, agent = key
-        fa = fact.get(key)
-        ta = other.get(key)
-        if fa is None or ta is None:
-            return {
-                "identical": False,
-                "round": rnd,
-                "agent": agent,
-                "channel": "presence",
-                "factual": None if fa is None else str(fa.get("type")),
-                "twin": None if ta is None else str(ta.get("type")),
-            }
-        if str(fa.get("type")) != str(ta.get("type")):
-            return {
-                "identical": False,
-                "round": rnd,
-                "agent": agent,
-                "channel": "action",
-                "factual": str(fa.get("type")),
-                "twin": str(ta.get("type")),
-            }
-        if _stance_key(fa.get("public_position")) != _stance_key(ta.get("public_position")):
-            return {
-                "identical": False,
-                "round": rnd,
-                "agent": agent,
-                "channel": "public",
-                "factual": _stance_key(fa.get("public_position")),
-                "twin": _stance_key(ta.get("public_position")),
-            }
-        if _stance_key(fa.get("private_intent")) != _stance_key(ta.get("private_intent")):
-            return {
-                "identical": False,
-                "round": rnd,
-                "agent": agent,
-                "channel": "private",
-                "factual": _stance_key(fa.get("private_intent")),
-                "twin": _stance_key(ta.get("private_intent")),
-            }
-    return {"identical": True, "round": None, "agent": None, "channel": None, "factual": None, "twin": None}
+    from src.engine.causal.fork import first_meaningful_fork
+
+    return first_meaningful_fork(factual, twin, outcome=outcome)
 
 
 def _dump_split(effects: dict[str, EffectEstimate]) -> dict[str, dict[str, Any]]:
@@ -365,7 +328,7 @@ def three_worlds(
             "w2": {k: split2.get(k, 0.0) for k in split_keys},
         },
         "hypocrisy_index": abs(ppd1 - ppd0) - abs(public1 - public0),
-        "fork_w1": first_divergence(factual, w1),
+        "fork_w1": first_divergence(factual, w1, outcome=outcome),
         "identity_w1_ok": True,
         "run_ids": {"w1": w1.run_id, "w2": w2.run_id},
     }

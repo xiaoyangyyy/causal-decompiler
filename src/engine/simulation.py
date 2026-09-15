@@ -27,13 +27,13 @@ from src.engine.intervention import (
     get_active_interventions,
     load_interventions,
 )
-from src.engine.llm_adapter import LLMAdapter, QuotaExhaustedError, get_adapter, load_llm_config
+from src.engine.llm_adapter import LLMAdapter, QuotaExhaustedError, get_adapter
 from src.engine.probe import ProbeAgent
 from src.engine.role_policy import RolePolicyAgent
 from src.engine.run_log import RunLog, finalize_outcomes
 from src.engine.story_cast import event_cast_asdict
 from src.world.actions import ActionType, apply_project_effects
-from src.world.loader import PROJECT_ROOT, load_world
+from src.world.loader import PROJECT_ROOT, load_events, load_world
 from src.world.models import AgentRole, ProjectMetrics, WorldState
 from src.world.organization import authority_ids, resolve_event_cast
 
@@ -69,9 +69,10 @@ class SimConfig:
     observation_lesion: bool = False
     cognitive_sampling_top_k: int | None = None
     cognitive_sampling_threshold: float = 0.0
+    causal_do: dict[str, Any] = field(default_factory=dict)
+    scenario: str = "labwars"
 
     def to_dict(self) -> dict[str, Any]:
-        llm_cfg = load_llm_config()
         return {
             "max_rounds": self.max_rounds,
             "seed": self.seed,
@@ -94,9 +95,11 @@ class SimConfig:
             "observation_lesion": self.observation_lesion,
             "cognitive_sampling_top_k": self.cognitive_sampling_top_k,
             "cognitive_sampling_threshold": self.cognitive_sampling_threshold,
-            "llm_provider": self.llm_provider or llm_cfg.get("provider"),
-            "llm_model": self.llm_model or llm_cfg.get("model"),
+            "causal_do": dict(self.causal_do or {}),
+            "llm_provider": self.llm_provider,
+            "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
+            "scenario": self.scenario,
         }
 
 
@@ -261,18 +264,58 @@ def _seal_run_log(
         log.write_jsonl(Path(cfg.output_dir) / f"run_{log.run_id}.jsonl")
 
 
+def _apply_causal_do_event(event, causal_do: dict[str, Any], idea: str):
+    hide_id = causal_do.get("hide_event_id")
+    if hide_id and str(event.event_id) == str(hide_id):
+        hide_from = causal_do.get("hide_from") or idea
+        event.visibility = "private"
+        event.targets = [t for t in event.targets if t != hide_from]
+    return event
+
+
+def _apply_causal_do_actions(actions: list[dict[str, Any]], causal_do: dict[str, Any], round_num: int) -> None:
+    stmt = causal_do.get("force_public")
+    agent = causal_do.get("force_public_agent")
+    frm = int(causal_do.get("force_public_from") or 0)
+    if not stmt or not agent or round_num < frm:
+        return
+    for act in actions:
+        if str(act.get("agent") or "") != str(agent):
+            continue
+        public = dict(act.get("public_position") or {})
+        public["statement_type"] = stmt
+        act["public_position"] = public
+
+
+def _apply_causal_do_beliefs(world: WorldState, causal_do: dict[str, Any], round_num: int) -> None:
+    agent_id = causal_do.get("force_belief_agent")
+    beliefs = causal_do.get("force_belief") or {}
+    frm = int(causal_do.get("force_belief_from") or 0)
+    if not agent_id or round_num < frm or not beliefs:
+        return
+    agent = world.agents.get(str(agent_id))
+    if agent is None:
+        return
+    for key, val in beliefs.items():
+        if hasattr(agent.beliefs, key):
+            setattr(agent.beliefs, key, float(val))
+
+
 def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
     if cfg.mvp:
-        mvp = load_mvp_config()
-        cfg.active_agents = cfg.active_agents or mvp.active_agents
-        cfg.offstage_agents = cfg.offstage_agents or mvp.offstage_agents
-        if cfg.max_rounds == 60:
-            cfg.max_rounds = mvp.max_rounds
+        if str(cfg.scenario or "labwars") != "labwars":
+            cfg.mvp = False
+        else:
+            mvp = load_mvp_config()
+            cfg.active_agents = cfg.active_agents or mvp.active_agents
+            cfg.offstage_agents = cfg.offstage_agents or mvp.offstage_agents
+            if cfg.max_rounds == 60:
+                cfg.max_rounds = mvp.max_rounds
 
     run_id = cfg.run_id or str(uuid.uuid4())[:8]
     log = RunLog(run_id=run_id, config=cfg.to_dict())
 
-    world = _filter_world(load_world(), cfg)
+    world = _filter_world(load_world(cfg.scenario), cfg)
     if cfg.hierarchy_lesion:
         world = _apply_hierarchy_lesion(world)
     if cfg.status_lesion:
@@ -286,7 +329,11 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
     else:
         llm = TracingAdapter(inner, trace)
     hits0, misses0 = trace.hits, trace.misses
-    event_agent = EventAgent(seed=cfg.seed, state_events=not cfg.disable_state_events)
+    event_agent = EventAgent(
+        seed=cfg.seed,
+        state_events=not cfg.disable_state_events,
+        events=load_events(cfg.scenario),
+    )
     policy = RolePolicyAgent(llm=llm)
     critic = CriticAgent()
     probe = ProbeAgent()
@@ -345,6 +392,9 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
             if event is None:
                 continue
 
+            if cfg.causal_do:
+                event = _apply_causal_do_event(event, cfg.causal_do, event_cast.idea)
+
             if cfg.shuffle_memory:
                 _shuffle_memory_refs(world, cfg.seed + round_num)
 
@@ -368,6 +418,11 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
                     ])
                     act, _ = critic.fix_or_reject(act, agent, violations)
                 vetted_actions.append(act)
+
+            if cfg.causal_do:
+                _apply_causal_do_actions(vetted_actions, cfg.causal_do, round_num)
+
+            for act in vetted_actions:
                 log.record_action(act["agent"], act, round_num)
 
             cog = commit_cognition_phase(
@@ -379,6 +434,8 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
                 llm_adapter=llm,
                 omniscient_observation=cfg.observation_lesion,
             )
+            if cfg.causal_do:
+                _apply_causal_do_beliefs(world, cfg.causal_do, round_num)
             if cfg.status_lesion:
                 world = _apply_status_lesion(world)
             if cfg.trust_lesion:

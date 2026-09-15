@@ -321,3 +321,42 @@ class TestLoggedTrustAndSplitY:
         assert extract_outcome(doc, "protest_authorship") > extract_outcome(work, "protest_authorship")
         assert extract_outcome(ask, "protest_authorship") > extract_outcome(doc, "protest_authorship")
 
+
+class TestCrisisGridOutcomes:
+    def _log(self, events, actions=None):
+        log = RunLog(run_id="cg", config={"scenario": "crisisgrid"})
+        log.events = events
+        log.actions = actions or [{"agent": "dispatcher", "type": "share_result"}]
+        return log
+
+    def test_share_result_does_not_zero_stranded(self):
+        log = self._log([
+            {"event_id": "E003", "type": "bridge_closed"},
+            {"event_id": "E004", "type": "sensor_report"},
+            {"event_id": "E006", "type": "dispatch_brief"},
+        ])
+        y = extract_outcome(log, "stranded")
+        assert y > 0.2
+        assert extract_outcome(log, "y_action") == 0.0
+
+    def test_skipping_a_report_lowers_stranded(self):
+        full = self._log([
+            {"event_id": "E003", "type": "bridge_closed"},
+            {"event_id": "E004", "type": "sensor_report"},
+            {"event_id": "E005", "type": "citizen_report"},
+            {"event_id": "E006", "type": "dispatch_brief"},
+        ])
+        skipped = self._log([
+            {"event_id": "E004", "type": "sensor_report"},
+            {"event_id": "E005", "type": "citizen_report"},
+            {"event_id": "E006", "type": "dispatch_brief"},
+        ])
+        assert extract_outcome(skipped, "stranded") < extract_outcome(full, "stranded")
+
+    def test_e003_does_not_make_crisisgrid_canonical(self):
+        log = self._log([{"event_id": "E003", "round": 3, "type": "bridge_closed"}])
+        log.round_records = [{"round": 3, "event_id": "E003", "agent_deltas": {"rescue": {}}}]
+        cast = story_cast_from_log(log)
+        assert cast.canonical is False
+        assert cast.draft_round != 52
+

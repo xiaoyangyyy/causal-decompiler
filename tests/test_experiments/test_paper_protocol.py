@@ -15,7 +15,14 @@ from src.engine.causal.estimands import (
 from src.engine.causal.toy import contrastive_leave_one_out, exact_shapley, planted_factors, planted_outcome
 from src.engine.simulation import SimConfig
 from src.experiments.paper_protocol import run_paper_protocol
-from src.experiments.paper_tables import render_paper_markdown, table_forks, table_memory_irf, table_shapley
+from src.experiments.paper_tables import (
+    render_aggregate_tables,
+    render_paper_markdown,
+    table_forks,
+    table_matrix_cells,
+    table_memory_irf,
+    table_shapley,
+)
 
 
 def _cfg(**kwargs) -> SimConfig:
@@ -62,6 +69,8 @@ def test_decompile_log_replays_persisted_factual(tmp_path):
     assert report.identity_twin_ok
     assert report.llm_replay["identity_run_misses"] == 0
     assert "protest_authorship" in report.split_y
+    assert report.social_ir.get("node_count", 0) > 0
+    assert report.certificates
 
 
 def test_paper_protocol_lite_emits_tables():
@@ -75,8 +84,13 @@ def test_paper_protocol_lite_emits_tables():
     assert result.report.findings
     md = render_paper_markdown(result.report.to_dict())
     assert "Split-Y" in md
+    assert "Hierarchical search" in md
+    assert "Individual paired causal effect" in md
+    assert "not run on long LLM MRI" not in md
     assert "AND" in table_shapley(result.report.to_dict())
     assert result.report.shapley_toy["promise"] == 0.5
+    assert result.report.channels.get("ppg") is not None
+    assert not (result.report.information_algebra or {}).get("worlds")
     md_full = render_paper_markdown({
         **result.report.to_dict(),
         "memory_irf": [{
@@ -97,7 +111,7 @@ def test_paper_protocol_lite_emits_tables():
     })
     assert "Δ PPD" in md_full
     assert "Δ potential" in md_full
-    assert "First divergence" in md_full
+    assert "First meaningful fork" in md_full
 
 
 def test_and_event_ids_are_promise_and_draft():
@@ -113,6 +127,19 @@ def test_and_event_ids_are_promise_and_draft():
     op = draft_beat_op(log)
     assert op is not None
     assert op.target_event == "E052"
+
+
+def test_crisisgrid_and_event_ids_are_or_reports():
+    from src.engine.run_log import RunLog
+
+    log = RunLog(run_id="cg", config={"scenario": "crisisgrid"})
+    log.events = [
+        {"event_id": "E003", "round": 3, "type": "bridge_closed"},
+        {"event_id": "E004", "round": 4, "type": "sensor_report"},
+        {"event_id": "E006", "round": 6, "type": "dispatch_brief"},
+        {"event_id": "E008", "round": 8, "type": "sensor_report"},
+    ]
+    assert and_event_ids(log) == ["E003", "E004", "E008"]
 
 
 def test_first_divergence_marks_private_channel():
@@ -133,7 +160,7 @@ def test_first_divergence_marks_private_channel():
     assert fork["identical"] is False
     assert fork["channel"] == "private"
     assert fork["round"] == 4
-    assert "First divergence" in table_forks({
+    assert "First meaningful fork" in table_forks({
         "forks": [_fork_row(fork)],
     })
 
@@ -181,3 +208,46 @@ def test_planted_oracle_still_the_and_lie():
     assert shapley["promise"] == 0.5
     assert knockout["promise"] == 1.0
     assert sum(knockout.values()) == 2.0
+
+
+def test_matrix_model_for_keeps_providers_apart():
+    from src.experiments.__main__ import matrix_model_for
+
+    assert matrix_model_for("ollama", None) == "llama3.2"
+    assert matrix_model_for("deepseek", None) is None
+    assert matrix_model_for("deepseek", "deepseek-v4-flash") == "deepseek-v4-flash"
+
+
+def test_aggregate_tables_mark_protocol_gate_and_and_caveat():
+    md = render_aggregate_tables(
+        benchmark={
+            "n": 200,
+            "cause_set_f1": 1.0,
+            "interaction_sign_accuracy": 0.85,
+            "intervention_budget_mean": 43.9,
+            "false_attribution_rate": 0.0,
+            "by_family": {"and_synergy": {"n": 50, "f1": 1.0, "sign_accuracy": 0.4, "false_attribution": 0.0}},
+            "baselines": {
+                "baselines": {"knockout": {"f1": 0.63, "false_attribution": 0.25}},
+                "ablations": {"oracle_cstar": {"f1": 1.0, "false_attribution": 0.0}},
+            },
+        },
+        matrix={
+            "cells": [
+                {
+                    "scenario": "labwars",
+                    "provider": "ollama",
+                    "seed": 0,
+                    "identity": True,
+                    "y": 0.0115,
+                    "cstar": ["E003"],
+                }
+            ]
+        },
+    )
+    assert "protocol gate" in md.lower()
+    assert "paper caveat" in md
+    assert "{E003}" in md
+    assert "1/1" in table_matrix_cells(
+        {"cells": [{"scenario": "labwars", "provider": "ollama", "identity": True, "y": 0.01, "cstar": ["E003"]}]}
+    )

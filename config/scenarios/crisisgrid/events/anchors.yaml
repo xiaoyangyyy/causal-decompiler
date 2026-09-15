@@ -1,0 +1,431 @@
+events:
+- event_id: E001
+  round: 1
+  type: hospital_capacity
+  visibility: team
+  source: hospital
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: hospital_capacity
+    verifiable_claims:
+    - hospital_capacity
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: hospital_capacity
+- event_id: E002
+  round: 2
+  type: traffic_jam
+  visibility: team
+  source: traffic
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: traffic_jam
+    verifiable_claims:
+    - traffic_jam
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: traffic_jam
+- event_id: E003
+  round: 3
+  type: bridge_closed
+  visibility: team
+  source: traffic
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: bridge closed
+    verifiable_claims:
+    - bridge_closed
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: bridge closed
+- event_id: E004
+  round: 4
+  type: sensor_report
+  visibility: team
+  source: sensor_north
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: sensor_report
+    verifiable_claims:
+    - sensor_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: sensor_report
+- event_id: E005
+  round: 5
+  type: citizen_report
+  visibility: team
+  source: sensor_south
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: citizen_report
+    verifiable_claims:
+    - citizen_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: citizen_report
+- event_id: E006
+  round: 6
+  type: dispatch_brief
+  visibility: team
+  source: dispatcher
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: dispatch_brief
+    verifiable_claims:
+    - dispatch_brief
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: dispatch_brief
+- event_id: E007
+  round: 7
+  type: hospital_capacity
+  visibility: team
+  source: hospital
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: hospital_capacity
+    verifiable_claims:
+    - hospital_capacity
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: hospital_capacity
+- event_id: E008
+  round: 8
+  type: sensor_report
+  visibility: bilateral
+  source: sensor_north
+  targets:
+  - dispatcher
+  payload: {}
+  objective_fact:
+    raw_statement: sensor sees closure
+    verifiable_claims:
+    - sensor_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: sensor sees closure
+- event_id: E009
+  round: 9
+  type: citizen_report
+  visibility: public
+  source: sensor_south
+  targets:
+  - dispatcher
+  payload: {}
+  objective_fact:
+    raw_statement: citizen reports jam
+    verifiable_claims:
+    - citizen_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: citizen reports jam
+- event_id: E010
+  round: 10
+  type: sensor_report
+  visibility: team
+  source: sensor_north
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: sensor_report
+    verifiable_claims:
+    - sensor_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: sensor_report
+- event_id: E011
+  round: 11
+  type: citizen_report
+  visibility: team
+  source: sensor_south
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: citizen_report
+    verifiable_claims:
+    - citizen_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: citizen_report
+- event_id: E012
+  round: 12
+  type: dispatch_brief
+  visibility: team
+  source: dispatcher
+  targets:
+  - rescue
+  - hospital
+  payload: {}
+  objective_fact:
+    raw_statement: dispatcher belief update
+    verifiable_claims:
+    - dispatch_brief
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: dispatcher belief update
+- event_id: E013
+  round: 13
+  type: hospital_capacity
+  visibility: team
+  source: hospital
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: hospital_capacity
+    verifiable_claims:
+    - hospital_capacity
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: hospital_capacity
+- event_id: E014
+  round: 14
+  type: traffic_jam
+  visibility: team
+  source: traffic
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: traffic_jam
+    verifiable_claims:
+    - traffic_jam
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: traffic_jam
+- event_id: E015
+  round: 15
+  type: team_meeting
+  visibility: team
+  source: dispatcher
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: team_meeting
+    verifiable_claims:
+    - team_meeting
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: team_meeting
+- event_id: E016
+  round: 16
+  type: sensor_report
+  visibility: team
+  source: sensor_north
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: sensor_report
+    verifiable_claims:
+    - sensor_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: sensor_report
+- event_id: E017
+  round: 17
+  type: citizen_report
+  visibility: team
+  source: sensor_south
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: citizen_report
+    verifiable_claims:
+    - citizen_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: citizen_report
+- event_id: E018
+  round: 18
+  type: evac_order
+  visibility: team
+  source: dispatcher
+  targets:
+  - rescue
+  - traffic
+  payload: {}
+  objective_fact:
+    raw_statement: evac with or without reroute
+    verifiable_claims:
+    - evac_order
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: evac with or without reroute
+- event_id: E019
+  round: 19
+  type: hospital_capacity
+  visibility: team
+  source: hospital
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: hospital_capacity
+    verifiable_claims:
+    - hospital_capacity
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: hospital_capacity
+- event_id: E020
+  round: 20
+  type: traffic_jam
+  visibility: team
+  source: traffic
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: traffic_jam
+    verifiable_claims:
+    - traffic_jam
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: traffic_jam
+- event_id: E021
+  round: 21
+  type: team_meeting
+  visibility: team
+  source: dispatcher
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: team_meeting
+    verifiable_claims:
+    - team_meeting
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: team_meeting
+- event_id: E022
+  round: 22
+  type: sensor_report
+  visibility: team
+  source: sensor_north
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: sensor_report
+    verifiable_claims:
+    - sensor_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: sensor_report
+- event_id: E023
+  round: 23
+  type: citizen_report
+  visibility: team
+  source: sensor_south
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: citizen_report
+    verifiable_claims:
+    - citizen_report
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: citizen_report
+- event_id: E024
+  round: 24
+  type: dispatch_brief
+  visibility: team
+  source: dispatcher
+  targets:
+  - dispatcher
+  - rescue
+  payload: {}
+  objective_fact:
+    raw_statement: dispatch_brief
+    verifiable_claims:
+    - dispatch_brief
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: dispatch_brief

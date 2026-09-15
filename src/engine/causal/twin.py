@@ -54,6 +54,8 @@ def sim_config_from_log(log: RunLog, **overrides) -> SimConfig:
         llm_model=c.get("llm_model"),
         llm_temperature=c.get("llm_temperature"),
         interventions=interventions,
+        causal_do=dict(c.get("causal_do") or {}),
+        scenario=str(c.get("scenario") or "labwars"),
         run_id=None,
     )
     if overrides:

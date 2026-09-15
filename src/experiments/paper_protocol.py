@@ -1,17 +1,9 @@
 """Paper protocol: Causal Decompiler MRI plus optional CRN contrasts.
 
-This is the only experiment-facing MRI entry. Reviewers rerun
-`python -m src.experiments paper`. Library callers use `run_paper_protocol`.
-
-Phases (all CRN-paired, all replay LLM traces):
-
-1. Identity twin
-2. Split-Y snapshot (public vs private)
-3. Memory IRF over story beats
-4. Contrastive skip vs budgeted story Shapley (AND-cause lie)
-5. Three-worlds spillover / hypocrisy
-6. Optional λ lesion (field vs LLM) — cache misses expected
-7. Optional A/B/C/D/V CRN contrasts
+Commands:
+  paper      — MRI of one frozen trajectory (Top-k bidirectional search)
+  benchmark  — 200 parameterized mechanism worlds
+  matrix     — scenario × model × seed grid (explicit; not CI)
 """
 
 from __future__ import annotations
@@ -26,6 +18,7 @@ from src.engine.causal.twin import load_factual, sim_config_from_log
 from src.engine.simulation import SimConfig
 from src.experiments.paper_contrasts import run_paper_contrasts
 from src.experiments.paper_tables import latex_split_y, render_paper_markdown
+from src.engine.causal.viz import render_certificate_html
 from src.world.loader import PROJECT_ROOT
 
 DEFAULT_PAPER_DIR = PROJECT_ROOT / "output" / "reports"
@@ -113,6 +106,8 @@ def run_paper_protocol(
             encoding="utf-8",
         )
         md_path.write_text(markdown, encoding="utf-8")
+        html_path = out_dir / f"paper_protocol_{run_id}.html"
+        html_path.write_text(render_certificate_html(report.to_dict()), encoding="utf-8")
         runs_dir = PROJECT_ROOT / "output" / "runs"
         runs_dir.mkdir(parents=True, exist_ok=True)
         decompiler.last_log.write_jsonl(runs_dir / f"run_{run_id}.jsonl")

@@ -20,6 +20,8 @@ KIND_OBSERVE_LOCK = "OBSERVE_LOCK"
 KIND_POLICY_LAMBDA = "POLICY_LAMBDA"
 KIND_MECHANISM_LESION = "MECHANISM_LESION"
 KIND_RESAMPLE = "RESAMPLE"
+KIND_DO_BELIEF = "DO_BELIEF"
+KIND_DO_PUBLIC = "DO_PUBLIC"
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,63 @@ def set_policy_lambda(value: float) -> CausalOp:
 
 def lesion(channel: str) -> CausalOp:
     return CausalOp(kind=KIND_MECHANISM_LESION, payload={"channel": channel})
+
+
+def do_presence(round_num: int, event_id: str | None = None) -> CausalOp:
+    """Change whether the event occurs; keep original visibility if it does."""
+    return skip_event(round_num, event_id)
+
+
+def do_event(round_num: int, event_id: str | None = None) -> CausalOp:
+    """Paper name for do_presence / skip_event."""
+    return skip_event(round_num, event_id)
+
+
+def do_visibility(
+    variant: str = "omniscient",
+    *,
+    event_id: str | None = None,
+    agent_id: str | None = None,
+    round_num: int | None = None,
+) -> CausalOp:
+    """Keep the event; change who can observe it."""
+    return CausalOp(
+        kind=KIND_OBSERVE_LOCK,
+        variant=variant,
+        round=round_num,
+        target_event=event_id,
+        target_agent=agent_id,
+    )
+
+
+def do_memory(round_num: int, agent_id: str = "phd_a") -> CausalOp:
+    """Keep the event and its observers; change whether it is stored."""
+    return delete_memory(round_num, agent_id)
+
+
+def do_belief(round_num: int, agent_id: str, beliefs: dict[str, Any] | None = None) -> CausalOp:
+    """Force private beliefs without changing the event or its visibility."""
+    return CausalOp(
+        kind=KIND_DO_BELIEF,
+        round=round_num,
+        target_agent=agent_id,
+        payload={"beliefs": dict(beliefs or {"pi_fairness": 0.9})},
+    )
+
+
+def do_private_public(round_num: int, agent_id: str, statement_type: str = "team_support") -> CausalOp:
+    """Force the public expression channel; leave private intent intact."""
+    return CausalOp(
+        kind=KIND_DO_PUBLIC,
+        round=round_num,
+        target_agent=agent_id,
+        payload={"statement_type": statement_type},
+    )
+
+
+def do_behavior(round_num: int, agent_id: str, statement_type: str = "team_support") -> CausalOp:
+    """Layer-B intervention: constrain expression/action while leaving S intact."""
+    return do_private_public(round_num, agent_id, statement_type)
 
 
 def resample(stream: str, *, round_num: int | None = None, agent_id: str | None = None, name: str = "u", salt: int = 1) -> CausalOp:
@@ -134,7 +193,32 @@ def apply_ops(base: SimConfig, ops: list[CausalOp]) -> tuple[SimConfig, dict[str
             extra.append(inter)
             continue
         if op.kind == KIND_OBSERVE_LOCK:
-            cfg = replace(cfg, observation_lesion=(op.variant != "gated"))
+            if op.variant in {None, "omniscient", "gated"}:
+                cfg = replace(cfg, observation_lesion=(op.variant != "gated"))
+            else:
+                do = dict(cfg.causal_do or {})
+                do.update({
+                    "hide_event_id": op.target_event,
+                    "hide_from": op.target_agent,
+                    "hide_from_round": op.round,
+                })
+                cfg = replace(cfg, causal_do=do)
+        elif op.kind == KIND_DO_BELIEF:
+            do = dict(cfg.causal_do or {})
+            do.update({
+                "force_belief": dict(op.payload.get("beliefs") or {}),
+                "force_belief_agent": op.target_agent,
+                "force_belief_from": op.round,
+            })
+            cfg = replace(cfg, causal_do=do)
+        elif op.kind == KIND_DO_PUBLIC:
+            do = dict(cfg.causal_do or {})
+            do.update({
+                "force_public": str(op.payload.get("statement_type") or "team_support"),
+                "force_public_agent": op.target_agent,
+                "force_public_from": op.round,
+            })
+            cfg = replace(cfg, causal_do=do)
         elif op.kind == KIND_POLICY_LAMBDA:
             cfg = replace(cfg, cognitive_policy_lambda=float(op.payload["lambda"]))
         elif op.kind == KIND_MECHANISM_LESION:
@@ -158,7 +242,10 @@ def apply_ops(base: SimConfig, ops: list[CausalOp]) -> tuple[SimConfig, dict[str
             name = str(op.payload.get("name") or "u")
             agent = op.target_agent or "-"
             salt = int(op.payload.get("salt") or 1)
-            if op.round is not None:
+            if name == "*" or op.payload.get("global"):
+                salts[stream] = salt
+                salts[f"{stream}|*|*"] = salt
+            elif op.round is not None:
                 salts[f"{op.round}|{stream}|{agent}|{name}"] = salt
             else:
                 salts[f"{stream}|{agent}|{name}"] = salt

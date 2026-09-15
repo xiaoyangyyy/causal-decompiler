@@ -248,6 +248,9 @@ def _beats_from_config(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _is_canonical_story(log: Any, ids: set[str]) -> bool:
+    scenario = str((getattr(log, "config", None) or {}).get("scenario") or "labwars")
+    if scenario in {"crisisgrid", "releaseops"}:
+        return False
     explicit = (log.config.get("story_beats") or {}).get("canonical")
     if explicit is False:
         return False
