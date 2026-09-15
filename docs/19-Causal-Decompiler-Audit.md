@@ -1,6 +1,6 @@
 # Causal Decompiler 审计归档
 
-归档日期：2026-09-14。
+归档日期：2026-09-14。仓库现名为 **Causal Decompiler**（GitHub：`causal-decompiler`）；LabWars 是场景包，不是仓库名。
 
 中心命题：一条 agent 轨迹可以当成可执行的因果程序。先证明能原样重放，再对内部构件做 `do()`，把结果反编译成最小事件集、交互类型、以及被中介的路径。
 

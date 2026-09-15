@@ -1,8 +1,10 @@
-# LabWars
+# Causal Decompiler
 
-> **LabWars 不模拟科研成功，而是反编译科研合作为什么变成内斗。**
+> 把一条 agent 轨迹当成可执行的因果程序：先原样重放，再对内部构件做 `do()`，反编译成最小事件、交互与中介路径。
+>
+> From “Why did the agent say this?” to “What had to happen for this outcome to occur?”
 
-一个 14 角色、60 轮的学术实验室权力博弈沙盒。论文对象是对**一条冻结事实轨迹**做 Causal MRI：冻结外生噪声和 LLM 文本，修补展开后的 SCM，读公开 vs 私下结果向量。
+LabWars 只是其中一个场景（14 角色、60 轮学术实验室权力博弈）。另外两个独立包是 CrisisGrid（空间通讯）和 ReleaseOps（工作流 DAG）。论文对象是对**一条冻结事实轨迹**做 Causal MRI：冻结外生噪声和 LLM 文本，修补展开后的 SCM，读公开 vs 私下结果向量。
 
 主入口是 [`docs/18-Causal-Decompiler-Paper-Protocol.md`](docs/18-Causal-Decompiler-Paper-Protocol.md)。不要跑独立 seed 的条件矩阵，也不要重建已删除的 scale / 630-cell ATE 扫描。
 
@@ -82,16 +84,16 @@ python -m src.experiments report -e A -c A2 --seed 42
 ## 项目结构
 
 ```
-LabWars/
-├── 00-总文档.md
+causal-decompiler/
+├── 00-总文档.md            # LabWars 场景的历史总览
 ├── README.md
-├── docs/                  # 18 为论文协议
+├── docs/                  # 18 为论文协议；19 为审计归档
 ├── schemas/
-├── config/                # llm.deepseek.yaml 不含密钥
+├── config/                # 含 scenarios/{labwars,crisisgrid,releaseops}
 ├── src/
 │   ├── world/
 │   ├── cognition/
-│   ├── engine/            # 含 causal Decompiler
-│   └── experiments/       # paper MRI, CRN contrasts, A–D/V
+│   ├── engine/            # Causal Decompiler
+│   └── experiments/       # paper MRI, 200 worlds, matrix
 └── output/                # gitignored：runs + reports
 ```
