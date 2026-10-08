@@ -38,7 +38,7 @@ from src.world.organization import (
     observation_channel,
     perceived_event,
     resolve_event_cast,
-    rumor_recipients,
+    rumor_leaks,
 )
 
 
@@ -59,7 +59,8 @@ def pre_decision_recall(
     omniscient_observation: bool = False,
 ) -> dict[str, RecallResult]:
     """Phase A: decay + recall before agent policy (no memory write yet)."""
-    leaked = set() if omniscient_observation else set(rumor_recipients(world, event))
+    leaks = {} if omniscient_observation else rumor_leaks(world, event)
+    leaked = set(leaks)
     if disable_memory:
         empty: dict[str, RecallResult] = {}
         for agent_id, agent in world.agents.items():
@@ -78,11 +79,33 @@ def pre_decision_recall(
         channel = observation_channel(
             agent, event, leaked=leaked, omniscient=omniscient_observation
         )
-        cue = perceived_event(event, channel)
+        leak = float(leaks.get(agent_id, 0.0))
+        cue = perceived_event(event, channel, leak=leak)
         recall = recall_memories(agent, cue, current_round)
         recall.audit["observation_channel"] = channel
+        recall.audit["rumor_leak"] = leak
         recalls[agent_id] = recall
     return recalls
+
+
+def _lab_scenario(world: WorldState) -> bool:
+    return str(world.world_config.get("scenario") or "labwars") == "labwars"
+
+
+def _advance_operation(world: WorldState, event: EventAtom) -> None:
+    """Pack state moves with its own events. LabWars authorship state is left alone."""
+    scenario = str(world.world_config.get("scenario") or "labwars")
+    project = world.project.project
+    salience = float(event.memory_salience)
+    if scenario == "crisisgrid" and event.type in {"bridge_closed", "sensor_report", "citizen_report"}:
+        project.hazard = clamp(project.hazard + (1.0 - project.hazard) * 0.25 * salience)
+    elif scenario == "releaseops" and event.type == "stale_config":
+        project.outage_mass = clamp(project.outage_mass + (1.0 - project.outage_mass) * 0.25 * salience)
+    elif scenario == "releaseops" and event.type == "test_skipped":
+        project.skip_mass = clamp(project.skip_mass + (1.0 - project.skip_mass) * 0.25 * salience)
+    elif scenario == "releaseops" and event.type in {"rollback", "alert"}:
+        project.outage_mass = clamp(project.outage_mass * (1.0 - 0.35 * salience))
+        project.skip_mass = clamp(project.skip_mass * (1.0 - 0.20 * salience))
 
 
 def commit_cognition_phase(
@@ -104,9 +127,12 @@ def commit_cognition_phase(
     from src.world.models import ProjectMetrics
 
     world.project.project = ProjectMetrics(**project_dict)
+    _advance_operation(world, event)
     update_ledger_from_event(world, event.type, event.payload)
+    lab_authorship = _lab_scenario(world)
 
-    leaked = set() if omniscient_observation else set(rumor_recipients(world, event))
+    leaks = {} if omniscient_observation else rumor_leaks(world, event)
+    leaked = set(leaks)
     channels: dict[str, str] = {}
     agent_deltas: dict[str, dict[str, Any]] = {}
 
@@ -126,9 +152,12 @@ def commit_cognition_phase(
         if not disable_memory and channel == "direct":
             reconsolidation = reconsolidate_memories(agent, event, recall, current_round)
             mem = write_memory(agent, event, current_round, llm_adapter=llm_adapter, world=world)
-        cue = perceived_event(event, channel)
+        leak = float((recall.audit or {}).get("rumor_leak") or leaks.get(agent_id, 0.0)) if recall else float(leaks.get(agent_id, 0.0))
+        cue = perceived_event(event, channel, leak=leak)
         emotion = update_emotion(agent, cue, world.project.project, recall, channel=channel)
-        beliefs = update_beliefs(agent, cue, world.project.project, recall, channel=channel)
+        beliefs = update_beliefs(
+            agent, cue, world.project.project, recall, channel=channel, lab_authorship=lab_authorship,
+        )
 
         agent_deltas[agent_id] = {
             "memory_written": mem.to_dict() if mem else None,
@@ -150,6 +179,7 @@ def commit_cognition_phase(
                 llm_adapter=llm_adapter,
                 channel="rumor",
                 world=world,
+                leak=float(leaks.get(agent_id, 0.0)),
             )
             if rumor_mem:
                 agent_deltas.setdefault(agent_id, {})
@@ -213,8 +243,8 @@ def apply_action_cognition(
     intensity = float(action.get("intensity", 0.5))
 
     update_ledger_from_action(world, agent_id, intensity, str(atype or ""))
-
-    apply_action_belief_feedback(agent, str(atype or ""), intensity)
+    if _lab_scenario(world):
+        apply_action_belief_feedback(agent, str(atype or ""), intensity)
 
     if atype in ESCALATED_ACTIONS:
         shock = impulse_response(intensity, sensitivity=0.36, saturation=2.4)

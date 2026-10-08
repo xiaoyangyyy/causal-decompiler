@@ -37,7 +37,10 @@ class TestSimulationMVP:
     def test_full_60_rounds(self):
         log = run_simulation(SimConfig(max_rounds=60, seed=1, interventions=[]))
         assert len(log.round_records) == 60
-        assert log.events[-1]["event_id"] == "E060"
+        assert len(log.events) == 60
+        last = log.events[-1]
+        assert last["round"] == 60
+        assert last["payload"]["generator"] == "state_event_field"
 
     def test_jsonl_output(self, tmp_path):
         log = run_simulation(SimConfig(mvp=True, seed=1, max_rounds=5, output_dir=tmp_path, interventions=[]))
@@ -115,14 +118,14 @@ class TestCausal:
     def test_memory_delete_twin_runs(self):
         cfg = SimConfig(mvp=True, max_rounds=12, seed=3, llm_provider="scripted")
         factual = run_factual(cfg)
-        twin = run_twin(cfg, [delete_memory(3)], llm_trace=factual.llm_cache)
+        twin = run_twin(cfg, [delete_memory(3, "phd_a")], llm_trace=factual.llm_cache)
         assert twin.outcomes
         assert twin.run_id != factual.run_id
 
     def test_memory_delete_reduces_authorship_cluster(self):
         cfg = SimConfig(max_rounds=55, seed=42, llm_provider="scripted")
         factual = run_factual(cfg)
-        twin = run_twin(cfg, [delete_memory(45)], llm_trace=factual.llm_cache)
+        twin = run_twin(cfg, [delete_memory(45, "phd_a")], llm_trace=factual.llm_cache)
         cluster_ctrl = extract_outcome(factual, "memory_authorship_cluster_strength")
         cluster_treat = extract_outcome(twin, "memory_authorship_cluster_strength")
         assert cluster_treat <= cluster_ctrl + 0.01

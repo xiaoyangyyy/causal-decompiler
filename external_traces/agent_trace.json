@@ -1,0 +1,18 @@
+{
+  "system": "external-log-v1",
+  "note": "The structural rules below are the world. Replay does not call the lab simulator.",
+  "events": ["e1", "e2"],
+  "visibility": {"e1": ["a", "b"], "e2": ["b"]},
+  "memory": {"a": ["e1"], "b": ["e2"]},
+  "actions": {"a": "watch", "b": "act"},
+  "y": 1.0,
+  "program": {
+    "else_y": 1.0,
+    "rules": [
+      {"missing_event": "e1", "y": 0.0},
+      {"hidden_from": {"event": "e1", "agent": "a"}, "y": 0.0},
+      {"forgotten": {"event": "e1", "agent": "a"}, "y": 0.0},
+      {"action_is": {"agent": "b", "value": "idle"}, "y": 0.0}
+    ]
+  }
+}

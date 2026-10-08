@@ -29,26 +29,13 @@ from src.engine.causal.ir import (
     NODE_PUBLIC,
     NODE_RELATIONSHIP,
     NODE_VISIBILITY,
-    PROTEST_MEMORY_TYPES,
     SocialCausalIR,
     TYPE_TO_LAYER,
 )
 
-PROTEST_ACTIONS = {
-    "ask_for_authorship", "privately_lobby_pi", "confront", "rebel",
-    "challenge_claim", "withdraw", "leak_concern", "self_advocacy",
-    "forward_message", "reroute", "rollback", "ignore_alert", "skip_regression",
-}
-AND_EVENT_IDS = ("E003", "E052")
 DEFAULT_ALPHAS = (0.8, 0.9, 0.95)
 PAPER_TOP_K_SCRIPTED = 8
 PAPER_TOP_K_LLM = 5
-
-MECHANISM_EVENT_HINTS = (
-    "authorship", "promise", "draft", "credit", "first_author",
-    "bridge", "sensor", "citizen", "dispatch", "evac", "reroute",
-    "stale", "skip_test", "alert", "rollback", "outage", "deploy",
-)
 
 LAYER_OP = {
     NODE_EVENT: "do_event",
@@ -133,54 +120,50 @@ def candidates_for_outcome(
 
 
 def _candidate_relevance(row: dict[str, Any]) -> float:
-    """Mechanism-aware rank: planted/hinted events, mediating memory, then behavior."""
-    src = str(row.get("source_event") or "")
+    """Rank ancestors by IR layer and time. No event-id or scenario-keyword bonus."""
     typ = str(row.get("type") or "")
     layer = str(row.get("layer") or "")
     rnd = int(row.get("round") or 0)
-    payload = row.get("payload") or {}
-    ct = str(payload.get("content_type") or "")
-    atype = str(payload.get("action_type") or "")
-    et = str(payload.get("event_type") or "").lower()
-    blob = f"{src} {et} {ct} {atype}".lower()
     score = 0.0
-    if src in AND_EVENT_IDS:
-        score += 100.0
-        if src == "E052":
-            score += 6.0
-        elif src == "E003":
-            score += 5.0
-    if any(hint in blob for hint in MECHANISM_EVENT_HINTS):
-        score += 40.0
-    if layer == LAYER_EVENT:
+    if layer == LAYER_EVENT or typ == NODE_EVENT:
         score += 20.0
-    if typ == NODE_MEMORY and (ct in PROTEST_MEMORY_TYPES or "promise" in ct or "author" in ct or "alert" in ct or "bridge" in ct):
-        score += 50.0
-        if rnd in (3, 20, 45, 52) or rnd >= 45:
-            score += 12.0
-    if typ == NODE_ACTION and atype in PROTEST_ACTIONS:
-        score += 40.0
-        if rnd >= 45:
-            score += 10.0
-    if typ == NODE_VISIBILITY:
-        score += 28.0
-    if typ == NODE_PUBLIC:
-        score += 22.0
-    if typ == NODE_RELATIONSHIP:
+    elif typ == NODE_MEMORY:
+        score += 16.0
+    elif typ == NODE_VISIBILITY:
+        score += 14.0
+    elif typ == NODE_ACTION:
         score += 12.0
-    if typ == NODE_GOAL:
-        score += 4.0
-        if rnd <= 2:
-            score -= 40.0
-    if typ == NODE_BELIEF:
+    elif typ == NODE_PUBLIC:
+        score += 10.0
+    elif typ == NODE_RELATIONSHIP:
+        score += 8.0
+    elif typ == NODE_BELIEF:
         score += 6.0
-    score += min(rnd, 60) * 0.01
+    elif typ == NODE_GOAL:
+        score += 4.0
+    score += min(max(rnd, 0), 60) * 0.01
     return score
 
 
 def harsanyi_pair(y_ij: float, y_i: float, y_j: float, y_empty: float) -> float:
     """I_ij = v({i,j}) - v({i}) - v({j}) + v(∅)."""
     return float(y_ij) - float(y_i) - float(y_j) + float(y_empty)
+
+
+def harsanyi_set(value_of, factors: tuple[str, ...] | list[str]) -> float:
+    """k-order Harsanyi dividend of `factors`. Pairwise is the k=2 case.
+
+    I(S) = sum_{Tsubseteq S} (-1)^{|S|-|T|} v(T). For an AND of k>2 this is the
+    joint effect, while every pair dividend is 0.
+    """
+    items = tuple(factors)
+    k = len(items)
+    total = 0.0
+    for size in range(k + 1):
+        sign = 1.0 if (k - size) % 2 == 0 else -1.0
+        for combo in combinations(items, size):
+            total += sign * float(value_of(frozenset(combo)))
+    return total
 
 
 def harsanyi_from_shapley(story_shapley: dict[str, Any] | None) -> dict[str, Any]:
@@ -265,7 +248,17 @@ def _smallest_recovery(
     alpha: float,
 ) -> dict[str, Any]:
     v_full = recovery_value(y_full, y_empty)
-    recover_at = y_empty + float(alpha) * v_full if v_full else max(0.02, float(alpha) * abs(y_full))
+    if abs(v_full) <= 1e-12:
+        return {
+            "set": [],
+            "size": 0,
+            "alternatives": [],
+            "alpha": float(alpha),
+            "recover_at": y_empty,
+            "v_full": v_full,
+            "reason": "no effect to recover",
+        }
+    recover_at = y_empty + float(alpha) * v_full
     recovered: list[tuple[int, list[str]]] = []
     if factors and y:
         for size in range(1, len(factors) + 1):
@@ -285,7 +278,7 @@ def _smallest_recovery(
             "size": size,
             "alternatives": alts if len(alts) > 1 else [],
             "alpha": float(alpha),
-            "threshold": recover_at,
+            "recover_at": recover_at,
             "v_full": v_full,
             "reason": (
                 "redundant: any listed singleton recovers Y"
@@ -298,7 +291,7 @@ def _smallest_recovery(
         "size": len(factors),
         "alternatives": [],
         "alpha": float(alpha),
-        "threshold": recover_at,
+        "recover_at": recover_at,
         "v_full": v_full,
         "reason": "joint AND: no evaluated subset meets α v(Top-k)",
     }
@@ -329,13 +322,13 @@ def minimal_effect_recovery_set(
     }
     if not factors:
         ranked = sorted(_evaluated_effects(payload), key=lambda row: -abs(row["ate"]))
-        chosen = [row["id"] for row in ranked if abs(row["ate"]) >= max(0.02, 0.5 * abs(ranked[0]["ate"] if ranked else 0.0))][:3]
+        chosen = [row["id"] for row in ranked if row["ate"] != 0.0][:3]
         result["set"] = chosen
         result["size"] = len(chosen)
         result["reason"] = "greedy over evaluated ops (no coalition y-table)"
     memory_hits = [
         row["id"] for row in _evaluated_effects(payload)
-        if row["kind"] == "delete_memory" and abs(row["ate"]) >= max(0.02, 0.5 * result["total_effect"] if result["total_effect"] else 0.02)
+        if row["kind"] == "delete_memory" and row["ate"] != 0.0
     ]
     if memory_hits and all("MEMORY" not in x and "memory" not in x.lower() for x in result["set"]):
         result = dict(result)
@@ -400,10 +393,11 @@ def classify_compliance_regime(
     }
 
 
-def op_from_candidate(row: dict[str, Any], idea: str = "phd_a") -> CausalOp | None:
+def op_from_candidate(row: dict[str, Any], idea: str | None = None) -> CausalOp | None:
+    """Map an IR row to a CausalOp. The subject agent comes from the row or story cast."""
     suggested = str(row.get("suggested_op") or "")
     rnd = int(row.get("round") or 1)
-    agent = str(row.get("agent") or idea)
+    agent = str(row.get("agent") or idea or "")
     eid = row.get("source_event")
     eid_s = str(eid) if eid else None
     if suggested == "do_event" or suggested == "skip_event" or row.get("type") == NODE_EVENT:
@@ -413,8 +407,12 @@ def op_from_candidate(row: dict[str, Any], idea: str = "phd_a") -> CausalOp | No
     if suggested == "do_visibility":
         return do_visibility("hide_idea", event_id=eid_s, agent_id=agent, round_num=rnd)
     if suggested == "do_memory" or suggested == "delete_memory":
+        if not agent:
+            return None
         return delete_memory(rnd, agent)
     if suggested == "do_behavior" or suggested == "do_private_public":
+        if not agent:
+            return None
         return do_behavior(rnd, agent)
     return None
 

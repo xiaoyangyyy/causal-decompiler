@@ -1,0 +1,39 @@
+{
+  "endpoint": "live",
+  "model": "deepseek-v4-flash",
+  "policy_mode": "llm_native",
+  "cognitive_sampling_top_k": null,
+  "scripted_run_id": "f57b3bca",
+  "llama_dual_run_id": "e7b342a8",
+  "deepseek_dual_run_id": "b321d418",
+  "deepseek_native": {
+    "scenario": "releaseops",
+    "seed": 0,
+    "provider": "deepseek",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 18,
+    "policy_mode": "llm_native",
+    "cognitive_sampling_top_k": null,
+    "run_id": "4a7af8bc",
+    "channels": {
+      "y_private": 0.027777777777777776,
+      "y_public": 0.027777777777777776,
+      "y_action": 0.0
+    }
+  },
+  "diffs_vs_scripted": {
+    "y_private": 0.027777777777777776,
+    "y_public": 0.027777777777777776,
+    "y_action": -0.7750611111111112
+  },
+  "diffs_vs_llama_dual": {
+    "y_private": 0.027777777777777776,
+    "y_public": 0.027777777777777776,
+    "y_action": -0.8872611111111113
+  },
+  "diffs_vs_deepseek_dual": {
+    "y_private": 0.027777777777777776,
+    "y_public": 0.027777777777777776,
+    "y_action": -0.7748444444444446
+  }
+}

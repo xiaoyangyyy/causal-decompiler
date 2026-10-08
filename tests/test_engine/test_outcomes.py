@@ -333,8 +333,7 @@ class TestCrisisGridOutcomes:
         log = self._log([
             {"event_id": "E003", "type": "bridge_closed"},
             {"event_id": "E004", "type": "sensor_report"},
-            {"event_id": "E006", "type": "dispatch_brief"},
-        ])
+        ], actions=[{"agent": "dispatcher", "type": "share_result"}])
         y = extract_outcome(log, "stranded")
         assert y > 0.2
         assert extract_outcome(log, "y_action") == 0.0

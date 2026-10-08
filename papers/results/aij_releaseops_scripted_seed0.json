@@ -1,0 +1,13 @@
+{
+  "scenario": "releaseops",
+  "seed": 0,
+  "provider": "scripted",
+  "anchor_keep_fraction": 1.0,
+  "rounds": 18,
+  "run_id": "9c84f71e",
+  "channels": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.7750611111111112
+  }
+}

@@ -162,36 +162,6 @@ def _findings(report: CausalMRIReport) -> list[str]:
         lines.append("Identity twin reproduced the factual trajectory under frozen U and LLM replay.")
     else:
         lines.append("Identity twin failed — later ATEs are not CRN-identified.")
-    split = report.split_y or {}
-    protest = float(split.get("protest_authorship", report.factual_y) or 0.0)
-    potential = float(split.get("authorship_escalation_potential", 0.0) or 0.0)
-    ppd = float(split.get("public_private_divergence_mean", 0.0) or 0.0)
-    comply = float(split.get("post_r52_compliance", 0.0) or 0.0)
-    trust_logged = float(split.get("trust_pi_logged", 0.0) or 0.0)
-    trust_path = float(split.get("trust_pi_path_mean", 0.0) or 0.0)
-    if labwars and trust_logged <= 0.061 and trust_path <= 0.10:
-        lines.append(
-            f"Trust channel is pinned near the recovery floor "
-            f"(logged={trust_logged:.3f}, path_mean={trust_path:.3f}); "
-            "ATEs on trust_pi_logged are not identified."
-        )
-    elif labwars and trust_path > 0.12:
-        lines.append(
-            f"Trust path-mean ({trust_path:.3f}) is above the floor — "
-            "do(M)/skip can move the private relationship channel."
-        )
-    if labwars and protest < 0.05 and potential > 0.08:
-        lines.append(
-            f"Public protest ({protest:.3f}) is action-gated; latent authorship potential "
-            f"({potential:.3f}) is the live MRI channel."
-        )
-    if labwars and ppd > 0.15 and protest < 0.05:
-        lines.append(
-            f"Split-Y: private divergence ({ppd:.3f}) is large while public protest ({protest:.3f}) stays compressed — "
-            "the hidden transcript is the estimand, not the binary revolt."
-        )
-    if labwars and comply > 0.5 and ppd > 0.2:
-        lines.append("Public compliance coexists with private divergence (hypocrisy / dual transcript).")
     shapley = report.story_shapley or {}
     if shapley.get("and_lie"):
         lines.append(
@@ -245,12 +215,6 @@ def _findings(report: CausalMRIReport) -> list[str]:
                 abs(_split_ate(item, "authorship_escalation_potential")),
             ),
         )
-        early = irf[0]
-        late = irf[-1]
-        if abs(float(late.get("ate", 0.0))) < abs(float(early.get("ate", 0.0))) * 0.5:
-            lines.append(
-                "Memory IRF: late deletion moves Y less than early deletion — the past has already committed."
-            )
         best = ranked[-1]
         lines.append(
             f"Largest memory-IRF move: {best.get('factor_id')} ATE={float(best.get('ate', 0.0)):+.4f}."
@@ -262,13 +226,13 @@ def _findings(report: CausalMRIReport) -> list[str]:
             d_pot = _split_ate(item, "authorship_escalation_potential")
             d_ppd = _split_ate(item, "public_private_divergence_mean")
             d_comply = _split_ate(item, "post_r52_compliance")
-            if abs(d_pot) > abs(d_pub) + 0.01:
+            if abs(d_pot) > abs(d_pub):
                 lines.append(
                     f"IRF {item.get('factor_id')}: latent potential Δ={d_pot:+.3f} moves while "
                     f"public protest Δ={d_pub:+.3f} stays compressed."
                 )
                 break
-            if abs(d_ppd) > abs(d_pub) + 0.02 and abs(d_ppd) > abs(d_comply) + 0.02:
+            if abs(d_ppd) > abs(d_pub) and abs(d_ppd) > abs(d_comply):
                 lines.append(
                     f"IRF {item.get('factor_id')}: private PPD Δ={d_ppd:+.3f} moves more than "
                     f"public protest Δ={d_pub:+.3f} / R52 comply Δ={d_comply:+.3f}."
@@ -286,7 +250,7 @@ def _findings(report: CausalMRIReport) -> list[str]:
         )
         break
     worlds = report.three_worlds or {}
-    if worlds.get("hypocrisy_index") is not None and abs(float(worlds.get("hypocrisy_index") or 0.0)) > 0.02:
+    if worlds.get("hypocrisy_index") is not None and float(worlds.get("hypocrisy_index") or 0.0) != 0.0:
         lines.append(
             f"Three-worlds hypocrisy index={float(worlds['hypocrisy_index']):+.3f}: "
             "private divergence moved more than public compliance under the same do()."

@@ -525,6 +525,12 @@ def _protest_stats(
     return escalated, soft, intensity
 
 
+def _protest_action_rate(log: RunLog, agent: str, r_min: int, r_max: int) -> float:
+    """Mean protest intensity over the window. A count is not divided by a fixed cap."""
+    _, _, intensity = _protest_stats(log, agent, r_min=r_min, r_max=r_max)
+    return intensity / max(1, int(r_max) - int(r_min) + 1)
+
+
 def _trust_pi_from_relationship(
     world_agents: dict | None,
     relationships: list | None,
@@ -809,9 +815,9 @@ def three_channel_y(log: RunLog, cast: StoryCast | None = None) -> dict[str, flo
     if scenario in {"crisisgrid", "releaseops"}:
         return _scenario_channels(log)
     cast = cast or story_cast_from_log(log)
-    private = extract_outcome(log, "authorship_escalation_potential", cast)
+    private = extract_outcome(log, "authorship_escalation_score", cast)
     public = extract_outcome(log, "protest_authorship", cast)
-    action = min(1.0, extract_outcome(log, "protest_action_count", cast) / 4.0)
+    action = _protest_action_rate(log, cast.idea, cast.draft_round, cast.protest_end)
     return _scenario_channels(log, private=private, public=public, action=action)
 
 
@@ -847,7 +853,24 @@ def _assign_trust_pi_final(
     log.outcomes.setdefault("career_hostage_index", 0.0)
 
 
+def _pack_scenario(log: RunLog) -> bool:
+    return str((log.config or {}).get("scenario") or "labwars") in {"crisisgrid", "releaseops"}
+
+
+def _store_pack_channels(log: RunLog) -> None:
+    channels = three_channel_y(log)
+    log.outcomes.update(channels)
+    log.outcomes["channels"] = dict(channels)
+    log.outcomes["split_y"] = {
+        key: float(channels.get(key, 0.0) or 0.0)
+        for key in ("y_private", "y_public", "y_action", "ppg", "pci")
+    }
+
+
 def finalize_outcomes(log: RunLog, world_agents: dict | None = None, relationships: list | None = None) -> None:
+    if _pack_scenario(log):
+        _store_pack_channels(log)
+        return
     cast = story_cast_from_log(log, world_agents)
     log.config.setdefault("event_cast", cast.event_cast_dict())
     log.config["story_beats"] = cast.beats_dict()
@@ -869,6 +892,9 @@ def finalize_outcomes(log: RunLog, world_agents: dict | None = None, relationshi
 def rehydrate_outcomes(log: RunLog) -> None:
     """Fill extractable outcomes from the persisted trajectory when live world state is gone."""
     if not log.round_records and not log.actions:
+        return
+    if _pack_scenario(log):
+        _store_pack_channels(log)
         return
     cast = story_cast_from_log(log)
     log.config.setdefault("event_cast", cast.event_cast_dict())

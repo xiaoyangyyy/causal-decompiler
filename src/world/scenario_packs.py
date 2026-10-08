@@ -99,12 +99,12 @@ def _event(eid: str, rnd: int, etype: str, source: str, targets: list[str], *, v
 
 def crisisgrid_pack() -> dict:
     agents = [
-        _agent("dispatcher", "pi", "Grid dispatcher", ["minimize_evac_time"], {"scenario_role": "dispatcher", "grid_cell": "hub"}),
-        _agent("sensor_north", "engineer", "North sensor", ["report_hazards"], {"scenario_role": "sensor", "grid_cell": "N"}),
-        _agent("sensor_south", "engineer", "South sensor", ["report_hazards"], {"scenario_role": "sensor", "grid_cell": "S"}),
-        _agent("hospital", "collaborator", "Hospital", ["absorb_casualties"], {"scenario_role": "hospital", "grid_cell": "E"}),
-        _agent("traffic", "experimenter", "Traffic control", ["keep_corridors_open"], {"scenario_role": "traffic", "grid_cell": "W"}),
-        _agent("rescue", "idea_originator", "Rescue lead", ["reroute_around_bridge"], {"scenario_role": "rescue", "grid_cell": "C"}),
+        _agent("dispatcher", "operator", "Grid dispatcher", ["minimize_evac_time"], {"scenario_role": "dispatcher", "grid_cell": "hub"}),
+        _agent("sensor_north", "operator", "North sensor", ["report_hazards"], {"scenario_role": "sensor", "grid_cell": "N"}),
+        _agent("sensor_south", "operator", "South sensor", ["report_hazards"], {"scenario_role": "sensor", "grid_cell": "S"}),
+        _agent("hospital", "operator", "Hospital", ["absorb_casualties"], {"scenario_role": "hospital", "grid_cell": "E"}),
+        _agent("traffic", "operator", "Traffic control", ["keep_corridors_open"], {"scenario_role": "traffic", "grid_cell": "W"}),
+        _agent("rescue", "operator", "Rescue lead", ["reroute_around_bridge"], {"scenario_role": "rescue", "grid_cell": "C"}),
     ]
     internal = [a["id"] for a in agents]
     events = []
@@ -130,13 +130,12 @@ def crisisgrid_pack() -> dict:
         "internal_agents": internal,
         "external_agents": [],
         "mandatory_anchor_events": ["E003", "E008", "E009", "E012", "E018"],
-        "initial_project": PROJECT,
+        "initial_project": {**PROJECT, "authorship_conflict": 0.0, "rival_threat": 0.0, "hazard": 0.35, "outage_mass": 0.0, "skip_mass": 0.0},
         "initial_contribution_ledger": {
-            "idea": {"dispatcher": 0.4, "rescue": 0.6},
-            "experiments": {"sensor_north": 0.5, "sensor_south": 0.5},
-            "writing": {"dispatcher": 1.0},
-            "data": {"hospital": 0.5, "traffic": 0.5},
-            "supervision": {"dispatcher": 1.0},
+            "coverage": {"dispatcher": 0.4, "rescue": 0.6},
+            "sensing": {"sensor_north": 0.5, "sensor_south": 0.5},
+            "care": {"hospital": 1.0},
+            "corridor": {"traffic": 1.0},
         },
         "scenario": "crisisgrid",
         "primary_outcome": "stranded",
@@ -147,12 +146,12 @@ def crisisgrid_pack() -> dict:
 
 def releaseops_pack() -> dict:
     agents = [
-        _agent("product", "pi", "Product owner", ["ship_on_time"], {"scenario_role": "product", "stage": "spec"}),
-        _agent("developer", "engineer", "Developer", ["land_change"], {"scenario_role": "developer", "stage": "code"}),
-        _agent("code_reviewer", "collaborator", "Code reviewer", ["gate_quality"], {"scenario_role": "reviewer", "stage": "review"}),
-        _agent("tester", "experimenter", "Tester", ["catch_regressions"], {"scenario_role": "tester", "stage": "test"}),
-        _agent("deployer", "postdoc", "Deployer", ["release_safely"], {"scenario_role": "deployer", "stage": "deploy"}),
-        _agent("monitor", "idea_originator", "Monitor", ["page_on_outage"], {"scenario_role": "monitor", "stage": "observe"}),
+        _agent("product", "operator", "Product owner", ["ship_on_time"], {"scenario_role": "product", "stage": "spec"}),
+        _agent("developer", "operator", "Developer", ["land_change"], {"scenario_role": "developer", "stage": "code"}),
+        _agent("code_reviewer", "operator", "Code reviewer", ["gate_quality"], {"scenario_role": "reviewer", "stage": "review"}),
+        _agent("tester", "operator", "Tester", ["catch_regressions"], {"scenario_role": "tester", "stage": "test"}),
+        _agent("deployer", "operator", "Deployer", ["release_safely"], {"scenario_role": "deployer", "stage": "deploy"}),
+        _agent("monitor", "operator", "Monitor", ["page_on_outage"], {"scenario_role": "monitor", "stage": "observe"}),
     ]
     internal = [a["id"] for a in agents]
     events = []
@@ -164,7 +163,9 @@ def releaseops_pack() -> dict:
         ("rollback", "deployer"),
         ("deploy_failure", "deployer"),
     ]
-    for rnd in range(1, 17):
+    # 18 rounds = three passes of the six-stage cycle, and past the planted rollback on round 13.
+    # Rounds 1–16 are the schedule used by the completed grid.
+    for rnd in range(1, 19):
         etype, src = cycle[(rnd - 1) % len(cycle)]
         events.append(_event(f"E{rnd:03d}", rnd, etype, src, ["product", "deployer"], desc=etype, anchor=True))
     events[2] = _event("E003", 3, "stale_config", "developer", ["tester", "deployer"], vis="team", anchor=True, desc="stale config merged")
@@ -173,17 +174,16 @@ def releaseops_pack() -> dict:
     events[10] = _event("E011", 11, "alert", "monitor", ["deployer"], vis="team", anchor=True, desc="alert can suppress outage")
     events[12] = _event("E013", 13, "rollback", "deployer", ["product"], vis="team", anchor=True, desc="rollback suppressor")
     world = {
-        "world": {"days_per_round": 1, "total_rounds": 16, "total_days": 16, "target_conference": "ReleaseOps"},
+        "world": {"days_per_round": 1, "total_rounds": 18, "total_days": 18, "target_conference": "ReleaseOps"},
         "internal_agents": internal,
         "external_agents": [],
         "mandatory_anchor_events": ["E003", "E006", "E009", "E011", "E013"],
-        "initial_project": PROJECT,
+        "initial_project": {**PROJECT, "authorship_conflict": 0.0, "rival_threat": 0.0, "hazard": 0.0, "outage_mass": 0.30, "skip_mass": 0.20},
         "initial_contribution_ledger": {
-            "idea": {"product": 0.7, "developer": 0.3},
-            "experiments": {"tester": 1.0},
-            "writing": {"product": 1.0},
-            "data": {"monitor": 1.0},
-            "supervision": {"product": 0.6, "code_reviewer": 0.4},
+            "spec": {"product": 1.0},
+            "change": {"developer": 1.0},
+            "gate": {"code_reviewer": 0.5, "tester": 0.5},
+            "release": {"deployer": 0.6, "monitor": 0.4},
         },
         "scenario": "releaseops",
         "primary_outcome": "task_y",

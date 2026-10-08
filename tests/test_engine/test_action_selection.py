@@ -6,7 +6,23 @@ from src.cognition.memory import RecallResult
 from src.engine.action_selection import generate_action_candidates, sample_action_candidate_legacy
 from src.engine.event_agent import EventAgent
 from src.world.actions import get_allowed_actions
-from src.world.loader import load_world
+from src.world.loader import load_events, load_world
+
+
+def test_pack_actions_stay_in_the_candidate_list_on_their_events():
+    crisis = load_world("crisisgrid")
+    bridge = next(event for event in load_events("crisisgrid") if event.type == "bridge_closed")
+    rescue = crisis.agents["rescue"]
+    crisis_allowed = [action.value for action in get_allowed_actions(rescue.id)] + ["reroute"]
+    crisis_kept = generate_action_candidates(rescue, bridge, crisis, None, crisis_allowed, seed=1)
+    assert any(candidate.type == "reroute" for candidate in crisis_kept)
+
+    release = load_world("releaseops")
+    stale = next(event for event in load_events("releaseops") if event.type == "stale_config")
+    deployer = release.agents["deployer"]
+    release_allowed = [action.value for action in get_allowed_actions(deployer.id)] + ["restore_release"]
+    release_kept = generate_action_candidates(deployer, stale, release, None, release_allowed, seed=1)
+    assert any(candidate.type == "restore_release" for candidate in release_kept)
 
 
 def test_candidates_have_probabilities_and_motives():

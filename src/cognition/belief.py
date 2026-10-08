@@ -176,25 +176,16 @@ def update_beliefs(
     recall: RecallResult | None = None,
     *,
     channel: str = "direct",
+    lab_authorship: bool = True,
 ) -> dict[str, float]:
     from src.world.organization import observation_gain
 
-    gain = observation_gain(channel)
-    if gain <= 0.0 and channel == "none":
-        obs_precision_base = 0.12
-        beliefs = agent.beliefs.model_dump()
-        project_obs = _project_belief_observation(project)
-        for key in BELIEF_KEYS:
-            val = getattr(project_obs, key, None)
-            if val is None:
-                continue
-            prior = beliefs[key]
-            beliefs[key] = round(
-                clamp(precision_weighted_update(prior, val, _prior_precision(agent, key), obs_precision_base * 0.35)),
-                4,
-            )
-        agent.beliefs = Beliefs(**beliefs)
-        return beliefs
+    leak = 1.0
+    if channel == "rumor" and recall is not None:
+        leak = float((recall.audit or {}).get("rumor_leak") or 0.0)
+    gain = observation_gain(channel, leak=leak)
+    if gain <= 0.0:
+        return agent.beliefs.model_dump()
 
     obs_precision_base = truth_status_precision(event.truth_status) * (0.5 + 0.5 * event.memory_salience)
     obs_precision_base *= 0.7 + 0.3 * (1.0 - agent.personality.conflict_avoidance)
@@ -222,16 +213,17 @@ def update_beliefs(
             total_prec += prec
         beliefs[key] = round(clamp(fused_obs), 4)
 
-    cluster = authorship_memory_cluster(agent, round_min=1, round_max=event.round, current_round=event.round)
-    cluster_gate = logistic_gate(cluster, center=0.45, steepness=5.0)
-    calm_gate = 1.0 - logistic_gate(agent.emotion.resentment, center=0.58, steepness=5.0)
-    unfair_gate = logistic_gate(0.52 - beliefs["pi_fairness"], center=0.0, steepness=5.0)
-    anchor = 0.30 + agent.personality.reciprocity * 0.14 + 0.08 * logistic_gate(cluster, center=1.0, steepness=4.0)
-    pull = 0.012 * cluster_gate * calm_gate * unfair_gate
-    beliefs["pi_fairness"] = round(
-        clamp(beliefs["pi_fairness"] + (anchor - beliefs["pi_fairness"]) * pull),
-        4,
-    )
+    if lab_authorship:
+        cluster = authorship_memory_cluster(agent, round_min=1, round_max=event.round, current_round=event.round)
+        cluster_gate = logistic_gate(cluster, center=0.45, steepness=5.0)
+        calm_gate = 1.0 - logistic_gate(agent.emotion.resentment, center=0.58, steepness=5.0)
+        unfair_gate = logistic_gate(0.52 - beliefs["pi_fairness"], center=0.0, steepness=5.0)
+        anchor = 0.30 + agent.personality.reciprocity * 0.14 + 0.08 * logistic_gate(cluster, center=1.0, steepness=4.0)
+        pull = 0.012 * cluster_gate * calm_gate * unfair_gate
+        beliefs["pi_fairness"] = round(
+            clamp(beliefs["pi_fairness"] + (anchor - beliefs["pi_fairness"]) * pull),
+            4,
+        )
 
     agent.beliefs = Beliefs(**beliefs)
     return beliefs

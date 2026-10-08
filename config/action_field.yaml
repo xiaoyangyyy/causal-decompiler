@@ -55,6 +55,9 @@ motive_weights:
   submit_workshop_version: {rival_anxiety: 0.35, career_pressure: 0.25, research_drive: 0.15, caution: -0.10}
   talk_to_alumni: {authorship_anxiety: 0.25, caution: 0.18, resentment_drive: 0.12}
   notify_program_officer: {career_pressure: 0.25, integrity_pressure: 0.20, caution: -0.10}
+  reroute: {hazard_exposure: 0.35, caution: 0.20}
+  restore_release: {outage_pressure: 0.40, caution: 0.20}
+  defer_test: {skip_pressure: 0.30, caution: 0.25}
 
 event_affinity:
   authorship_promise: {ask_for_authorship: 0.15, privately_lobby_pi: 0.12, document_contribution: 0.08}
@@ -66,3 +69,13 @@ event_affinity:
   rival_preprint: {check_rival_arxiv: 0.18, run_experiment: 0.12, submit_workshop_version: 0.10}
   negative_result_hidden: {analyze_failure: 0.10, leak_concern: 0.08, hide_negative_result: 0.06}
   integrity_dispute: {analyze_failure: 0.12, debug_code: 0.10, leak_concern: 0.07}
+  bridge_closed: {reroute: 0.16, share_result: 0.14}
+  sensor_report: {reroute: 0.14, share_result: 0.12}
+  citizen_report: {share_result: 0.14, reroute: 0.10}
+  dispatch_brief: {reroute: 0.12, share_result: 0.08}
+  evac_order: {reroute: 0.14, share_result: 0.10}
+  stale_config: {restore_release: 0.16, debug_code: 0.12}
+  test_skipped: {defer_test: 0.14, restore_release: 0.08}
+  alert: {restore_release: 0.14}
+  deploy_failure: {restore_release: 0.16, analyze_failure: 0.12}
+  rollback: {restore_release: 0.10}

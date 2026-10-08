@@ -91,7 +91,7 @@ def test_decompiler_smoke_report():
         _short_cfg(max_rounds=6),
         memory_rounds=[3],
         blame_event_ids=None,
-        extra_ops=[delete_memory(3)],
+        extra_ops=[delete_memory(3, "phd_a")],
     )
     assert report.identity_twin_ok
     assert "protest_authorship" in report.split_y

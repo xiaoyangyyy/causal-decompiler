@@ -16,11 +16,8 @@ from src.cognition.authorship import authorship_dispute_index, compute_authorshi
 from src.cognition.relationship import credit_threat_density, trust_fragmentation
 from src.engine.causal.noise import STREAM_EVENT_JITTER, STREAM_EVENT_SAMPLE, keyed_uniform, keyed_uniform_centered
 from src.world.loader import load_events
-from src.world.models import EventAtom, ObjectiveFact, WorldState
+from src.world.models import AgentRole, EventAtom, ObjectiveFact, WorldState
 from src.world.organization import resolve_event_cast
-
-REVIEWER_ACTIVE_FROM = 57
-
 
 @dataclass
 class EventCandidate:
@@ -304,7 +301,7 @@ class EventAgent:
             )
             candidate.tendency = max(-0.2, candidate.tendency + jitter)
         candidates.sort(key=lambda c: c.tendency, reverse=True)
-        kept = candidates[:6]
+        kept = candidates
         probs = _softmax([c.tendency for c in kept], temperature=0.24)
         for candidate, prob in zip(kept, probs):
             candidate.probability = prob
@@ -366,8 +363,9 @@ class EventAgent:
 
     def generate(self, round_num: int, world: WorldState) -> EventAtom | None:
         anchor = self._by_round.get(round_num)
+        labwars = str((world.world_config or {}).get("scenario") or "labwars") == "labwars"
         if anchor is None:
-            if not self.state_events:
+            if not self.state_events or not labwars:
                 return None
             candidates = self._state_candidates(round_num, world)
             probs = _softmax([c.tendency for c in candidates], temperature=0.24)
@@ -376,11 +374,7 @@ class EventAgent:
                 setattr(candidate, "_all_candidates", candidates)
             selected = self._sample_candidate(candidates, round_num)
             return self._materialize(selected, round_num, None)
-        if round_num == 60:
-            event = copy.deepcopy(anchor)
-            event.payload = {**event.payload, "generator": "terminal_anchor"}
-            return event
-        if not self.state_events:
+        if not self.state_events or not labwars:
             event = copy.deepcopy(anchor)
             event.payload = {**event.payload, "generator": "anchor_only"}
             return event
@@ -403,17 +397,31 @@ class EventAgent:
         return [copy.deepcopy(self._by_round[r]) for r in range(1, max_round + 1) if r in self._by_round]
 
 
-def is_agent_active(agent_id: str, round_num: int, config: dict[str, Any]) -> bool:
+def participation(agent_id: str, world: WorldState) -> float:
+    """How strongly this agent enters the step. The weight is a state, not a round."""
+    agent = world.agents.get(agent_id)
+    if agent is None:
+        return 0.0
+    project = world.project.project
+    if agent.role == AgentRole.REVIEWER or str(agent_id).startswith("reviewer_"):
+        return float(project.writing_quality)
+    if agent.role == AgentRole.RIVAL_LAB or agent_id == "rival_lab_h":
+        return float(project.rival_threat)
+    return 1.0
+
+
+def is_agent_active(
+    agent_id: str,
+    round_num: int,
+    config: dict[str, Any],
+    world: WorldState | None = None,
+) -> bool:
+    """Cast membership. A round number does not turn an agent on or off."""
+    del round_num
     active = config.get("active_agents")
-    if active is not None:
-        if agent_id not in active:
-            offstage = config.get("offstage_agents", [])
-            if agent_id in offstage and round_num >= config.get("offstage_min_round", 1):
-                return agent_id in ("rival_lab_h",) and round_num >= 21
-            return False
-    if agent_id.startswith("reviewer_"):
-        return round_num >= REVIEWER_ACTIVE_FROM
-    if agent_id == "rival_lab_h":
-        return round_num >= 21
-    return True
+    if active is not None and agent_id not in set(active) | set(config.get("offstage_agents") or []):
+        return False
+    if world is None:
+        return True
+    return participation(agent_id, world) > 0.0
 

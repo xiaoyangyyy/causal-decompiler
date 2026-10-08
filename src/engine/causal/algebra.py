@@ -63,7 +63,10 @@ def override_event(round_num: int, variant: str, event_id: str | None = None, ov
     )
 
 
-def delete_memory(round_num: int, agent_id: str = "phd_a") -> CausalOp:
+def delete_memory(round_num: int, agent_id: str) -> CausalOp:
+    """Delete one agent's memory at `round_num`. The caller supplies the subject."""
+    if not agent_id:
+        raise ValueError("delete_memory requires the subject agent from the trajectory cast")
     return CausalOp(kind=KIND_MEMORY_DELETE, round=round_num, target_agent=agent_id, variant="memory_delete_pi_promise")
 
 
@@ -106,7 +109,7 @@ def do_visibility(
     )
 
 
-def do_memory(round_num: int, agent_id: str = "phd_a") -> CausalOp:
+def do_memory(round_num: int, agent_id: str) -> CausalOp:
     """Keep the event and its observers; change whether it is stored."""
     return delete_memory(round_num, agent_id)
 
@@ -176,7 +179,7 @@ def _intervention_from_op(op: CausalOp) -> Intervention | None:
             type="memory_intervention",
             variant=op.variant or "memory_delete_pi_promise",
             apply_at_round=op.round,
-            target_agent=op.target_agent or "phd_a",
+            target_agent=op.target_agent,
             target_event=op.target_event,
         )
     return None

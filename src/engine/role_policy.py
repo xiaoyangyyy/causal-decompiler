@@ -24,11 +24,11 @@ from src.engine.prompts import (
     build_llm_native_policy_prompt,
     build_role_policy_prompt,
 )
-from src.world.actions import ActionType, get_allowed_actions
+from src.world.actions import ActionType, get_allowed_actions, pack_action_names
 from src.world.models import Agent, EventAtom, WorldState
 from src.world.organization import default_private_intent, observation_gain, primary_authority, resolve_event_cast
 
-from .event_agent import is_agent_active
+from .event_agent import is_agent_active, participation
 
 
 def _pick_target(agent: Agent, world: WorldState, event: EventAtom, suggested: str | None) -> str:
@@ -243,14 +243,14 @@ def _cognitive_sampling_scores(
     top_k = config.get("cognitive_sampling_top_k")
     if top_k is None:
         return {}
-    threshold = float(config.get("cognitive_sampling_threshold", 0.0) or 0.0)
     rows: list[dict[str, Any]] = []
     for agent_id, agent in world.agents.items():
-        if not is_agent_active(agent_id, event.round, config):
+        if not is_agent_active(agent_id, event.round, config, world):
             continue
+        weight = participation(agent_id, world)
         potential = compute_social_potential(world, agent, event, recalls.get(agent_id))
         dims = potential.dimensions
-        score = max(0.0, min(1.0,
+        score = weight * max(0.0, min(1.0,
             0.34 * float(dims.get("uncertainty", 0.0))
             + 0.24 * float(dims.get("memory_pressure", 0.0))
             + 0.18 * float(dims.get("trust_deficit", 0.0))
@@ -259,19 +259,20 @@ def _cognitive_sampling_scores(
         ))
         rows.append({"agent": agent_id, "score": round(score, 4), "dimensions": dims})
     rows.sort(key=lambda item: (float(item["score"]), str(item["agent"])), reverse=True)
-    selected = {item["agent"] for item in rows[: max(0, int(top_k))] if float(item["score"]) >= threshold}
+    selected = {item["agent"] for item in rows[: max(0, int(top_k))]}
     return {
         item["agent"]: {
             "enabled": True,
             "sampled": item["agent"] in selected,
             "score": item["score"],
             "top_k": int(top_k),
-            "threshold": threshold,
             "rank": idx + 1,
             "dimensions": item["dimensions"],
         }
         for idx, item in enumerate(rows)
     }
+
+
 class RolePolicyAgent:
     def __init__(self, llm: LLMAdapter, max_retries: int | None = None) -> None:
         self.llm = llm
@@ -442,7 +443,8 @@ class RolePolicyAgent:
         recall: RecallResult | None,
         config: dict[str, Any],
     ) -> dict[str, Any] | None:
-        if not is_agent_active(agent.id, event.round, config):
+        weight = participation(agent.id, world)
+        if weight <= 0.0 or not is_agent_active(agent.id, event.round, config, world):
             return None
 
         allowed = get_allowed_actions(agent.id, burnout=agent.emotion.burnout)
@@ -455,6 +457,10 @@ class RolePolicyAgent:
             [a.value for a in allowed],
             dynamic_avoid,
         )
+        scenario = str(world.world_config.get("scenario") or config.get("scenario") or "")
+        pack_names = pack_action_names(scenario)
+        if pack_names:
+            allowed_str = pack_names
 
         seed = int(config.get("seed", 0) or 0)
         policy_mode = str(config.get("policy_mode", "dual_engine"))
@@ -467,7 +473,10 @@ class RolePolicyAgent:
             obs_gain = 1.0
         else:
             channel = (recall.audit or {}).get("observation_channel") if recall else None
-            obs_gain = observation_gain(str(channel or "direct"))
+            obs_gain = observation_gain(
+                str(channel or "direct"),
+                leak=float((recall.audit or {}).get("rumor_leak") or 0.0) if channel == "rumor" else 1.0,
+            )
         candidates = generate_action_candidates(
             agent,
             event,
@@ -518,6 +527,9 @@ class RolePolicyAgent:
             round_num=event.round,
             agent_id=agent.id,
         )
+        selected_payload = dict(selected_payload)
+        selected_payload["intensity"] = float(selected_payload.get("intensity") or 0.0) * weight
+        selected_payload["participation"] = weight
         social_potential = compute_social_potential(
             world, agent, event, recall, target=selected_payload.get("target")
         )

@@ -1,6 +1,6 @@
 agents:
 - id: product
-  role: pi
+  role: operator
   display_name: Product owner
   goals:
   - ship_on_time
@@ -42,7 +42,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: developer
-  role: engineer
+  role: operator
   display_name: Developer
   goals:
   - land_change
@@ -84,7 +84,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: code_reviewer
-  role: collaborator
+  role: operator
   display_name: Code reviewer
   goals:
   - gate_quality
@@ -126,7 +126,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: tester
-  role: experimenter
+  role: operator
   display_name: Tester
   goals:
   - catch_regressions
@@ -168,7 +168,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: deployer
-  role: postdoc
+  role: operator
   display_name: Deployer
   goals:
   - release_safely
@@ -210,7 +210,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: monitor
-  role: idea_originator
+  role: operator
   display_name: Monitor
   goals:
   - page_on_outage

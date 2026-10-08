@@ -1,6 +1,6 @@
 agents:
 - id: dispatcher
-  role: pi
+  role: operator
   display_name: Grid dispatcher
   goals:
   - minimize_evac_time
@@ -42,7 +42,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: sensor_north
-  role: engineer
+  role: operator
   display_name: North sensor
   goals:
   - report_hazards
@@ -84,7 +84,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: sensor_south
-  role: engineer
+  role: operator
   display_name: South sensor
   goals:
   - report_hazards
@@ -126,7 +126,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: hospital
-  role: collaborator
+  role: operator
   display_name: Hospital
   goals:
   - absorb_casualties
@@ -168,7 +168,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: traffic
-  role: experimenter
+  role: operator
   display_name: Traffic control
   goals:
   - keep_corridors_open
@@ -210,7 +210,7 @@ agents:
     pi_access: 0.4
     external_network: 0.35
 - id: rescue
-  role: idea_originator
+  role: operator
   display_name: Rescue lead
   goals:
   - reroute_around_bridge

@@ -25,25 +25,25 @@ initial_project:
   novelty_risk: 0.3
   baseline_coverage: 0.3
   deadline_pressure: 0.55
-  rival_threat: 0.2
+  rival_threat: 0.0
   funding_pressure: 0.25
-  authorship_conflict: 0.1
+  authorship_conflict: 0.0
   team_morale: 0.65
   integrity_risk: 0.15
+  hazard: 0.35
+  outage_mass: 0.0
+  skip_mass: 0.0
 initial_contribution_ledger:
-  idea:
+  coverage:
     dispatcher: 0.4
     rescue: 0.6
-  experiments:
+  sensing:
     sensor_north: 0.5
     sensor_south: 0.5
-  writing:
-    dispatcher: 1.0
-  data:
-    hospital: 0.5
-    traffic: 0.5
-  supervision:
-    dispatcher: 1.0
+  care:
+    hospital: 1.0
+  corridor:
+    traffic: 1.0
 scenario: crisisgrid
 primary_outcome: stranded
 topology: spatial_comm

@@ -76,4 +76,4 @@ python -m src.experiments matrix --scenarios labwars,crisisgrid,releaseops --pro
 |---|---|---|---|
 | LabWars | hierarchy, 60 rounds | delayed memory, AND, performative compliance | authorship / PPG |
 | CrisisGrid | spatial comms, 20–30 rounds | visibility chain + OR reports | evac / stranded / resources |
-| ReleaseOps | workflow DAG, staged | AND faults + alert→rollback suppressor | deploy fail / rollback / outage |
+| ReleaseOps | workflow DAG, 18 rounds | AND faults + alert→rollback suppressor | deploy fail / rollback / outage |

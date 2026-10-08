@@ -1,0 +1,29 @@
+{
+  "endpoint": "live",
+  "model": "deepseek-v4-flash",
+  "scripted_run_id": "4dc4baa1",
+  "llama_run_id": "49adaacd",
+  "deepseek": {
+    "scenario": "labwars",
+    "seed": 0,
+    "provider": "deepseek",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 60,
+    "run_id": "974ed8d7",
+    "channels": {
+      "y_private": 0.15024205868415186,
+      "y_public": 0.15024205868415186,
+      "y_action": 0.24951625
+    }
+  },
+  "diffs_vs_scripted": {
+    "y_private": -0.000670021998428777,
+    "y_public": -0.000670021998428777,
+    "y_action": -0.00015124999999999167
+  },
+  "diffs_vs_llama": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.0
+  }
+}

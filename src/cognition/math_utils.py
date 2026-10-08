@@ -66,14 +66,14 @@ def competitive_inhibition(positive: float, negative: float, coupling: float = 1
 
 
 def truth_status_precision(truth_status: str) -> float:
-    """Continuous evidence precision — no binary verified/rumored split."""
-    mapping = {
-        "verified": 1.0,
-        "rumored": 0.55,
-        "disputed": 0.35,
-        "false": 0.12,
-    }
-    return mapping.get(truth_status, 0.45)
+    """Evidence precision as a smooth function of an ordered status coordinate."""
+    coordinate = {
+        "false": -1.5,
+        "disputed": -0.4,
+        "rumored": 0.2,
+        "verified": 1.4,
+    }.get(str(truth_status), 0.0)
+    return logistic_gate(coordinate, center=0.0, steepness=1.6)
 
 
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:

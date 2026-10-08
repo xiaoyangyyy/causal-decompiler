@@ -25,6 +25,7 @@ class AgentRole(str, Enum):
     REVIEWER = "reviewer"
     PROGRAM_OFFICER = "program_officer"
     ALUMNI = "alumni"
+    OPERATOR = "operator"
 
 
 class Personality(BaseModel):
@@ -183,6 +184,9 @@ class ProjectMetrics(BaseModel):
     authorship_conflict: float = 0.0
     team_morale: float = 0.0
     integrity_risk: float = 0.0
+    hazard: float = 0.0
+    outage_mass: float = 0.0
+    skip_mass: float = 0.0
 
     @field_validator("*", mode="before")
     @classmethod

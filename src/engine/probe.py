@@ -87,12 +87,12 @@ class ProbeAgent:
         split = getattr(report, "split_y", None) or {}
         protest = float(split.get("protest_authorship", 0.0))
         private = float(split.get("public_private_divergence_mean", 0.0))
-        if protest > 0.02 and private > 0.15:
+        if protest != 0.0 or private != 0.0:
             suggestions.append({
                 "round": 0,
                 "intervention_type": "observe_lock",
                 "variant": "omniscient",
-                "activation": round(min(1.0, private), 4),
+                "activation": round(min(1.0, max(abs(protest), abs(private))), 4),
                 "reason": (
                     f"split-Y: protest={protest:.3f} vs public_private_divergence={private:.3f}"
                 ),

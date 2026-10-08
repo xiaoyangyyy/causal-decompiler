@@ -1,0 +1,34 @@
+{
+  "endpoint": "live",
+  "scripted": {
+    "scenario": "labwars",
+    "seed": 0,
+    "provider": "scripted",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 60,
+    "run_id": "4dc4baa1",
+    "channels": {
+      "y_private": 0.15091208068258063,
+      "y_public": 0.15091208068258063,
+      "y_action": 0.2496675
+    }
+  },
+  "llama": {
+    "scenario": "labwars",
+    "seed": 0,
+    "provider": "ollama",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 60,
+    "run_id": "49adaacd",
+    "channels": {
+      "y_private": 0.15024205868415186,
+      "y_public": 0.15024205868415186,
+      "y_action": 0.24951625
+    }
+  },
+  "diffs": {
+    "y_private": -0.000670021998428777,
+    "y_public": -0.000670021998428777,
+    "y_action": -0.00015124999999999167
+  }
+}

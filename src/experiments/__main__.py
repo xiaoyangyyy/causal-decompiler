@@ -28,11 +28,12 @@ SCENARIO_OUTCOMES = {
     "crisisgrid": "stranded",
     "releaseops": "task_y",
 }
-SCENARIO_ROUNDS = {
-    "labwars": 8,
-    "crisisgrid": 8,
-    "releaseops": 8,
-}
+
+
+def _tape_rounds(scenario: str) -> int:
+    from src.world.loader import load_events
+
+    return max(1, len(load_events(scenario)))
 
 
 def _parse_int_list(raw: str) -> list[int]:
@@ -43,7 +44,7 @@ def _paper_cfg(args: argparse.Namespace) -> SimConfig:
     top_k = args.sampled_top_k if args.sampled_top_k is not None else PAPER_DEFAULT_TOP_K
     scenario = str(getattr(args, "scenario", None) or "labwars")
     return SimConfig(
-        max_rounds=args.rounds,
+        max_rounds=int(args.rounds) if args.rounds is not None else _tape_rounds(scenario),
         seed=args.seed,
         mvp=not args.full_cast and scenario == "labwars",
         interventions=[],
@@ -164,7 +165,7 @@ def cmd_matrix(args: argparse.Namespace) -> None:
             print(f"[{idx}/{total}] skip {scenario} {provider} seed={seed}")
             continue
         cfg = SimConfig(
-            max_rounds=int(args.rounds or SCENARIO_ROUNDS.get(scenario, 8)),
+            max_rounds=int(args.rounds) if args.rounds is not None else _tape_rounds(scenario),
             seed=int(seed),
             mvp=False,
             llm_provider=provider,
@@ -214,7 +215,7 @@ def cmd_matrix(args: argparse.Namespace) -> None:
 
 
 def _add_paper_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--rounds", type=int, default=8)
+    parser.add_argument("--rounds", type=int, default=None, help="Tape length when omitted")
     parser.add_argument("--seed", "-s", type=int, default=11)
     parser.add_argument("--full-cast", action="store_true", help="14-agent story instead of MVP")
     parser.add_argument("--llm-provider", default="scripted")
@@ -272,7 +273,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_matrix.add_argument("--providers", default="scripted")
     p_matrix.add_argument("--seeds", default="11")
     p_matrix.add_argument("--seed", "-s", type=int, default=11)
-    p_matrix.add_argument("--rounds", type=int, default=8)
+    p_matrix.add_argument("--rounds", type=int, default=None, help="Tape length when omitted")
     p_matrix.add_argument("--llm-model", default=None)
     p_matrix.add_argument("--sampled-top-k", type=int, default=None, help="LLM-scored agents per round (default 1)")
     p_matrix.add_argument("--lite", action="store_true")

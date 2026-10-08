@@ -40,7 +40,10 @@
         "funding_pressure": { "type": "number", "minimum": 0, "maximum": 1 },
         "authorship_conflict": { "type": "number", "minimum": 0, "maximum": 1 },
         "team_morale": { "type": "number", "minimum": 0, "maximum": 1 },
-        "integrity_risk": { "type": "number", "minimum": 0, "maximum": 1 }
+        "integrity_risk": { "type": "number", "minimum": 0, "maximum": 1 },
+        "hazard": { "type": "number", "minimum": 0, "maximum": 1 },
+        "outage_mass": { "type": "number", "minimum": 0, "maximum": 1 },
+        "skip_mass": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     },
     "contribution_ledger": {

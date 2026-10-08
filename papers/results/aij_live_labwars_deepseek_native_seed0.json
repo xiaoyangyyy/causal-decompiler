@@ -1,0 +1,39 @@
+{
+  "endpoint": "live",
+  "model": "deepseek-v4-flash",
+  "policy_mode": "llm_native",
+  "cognitive_sampling_top_k": null,
+  "scripted_run_id": "4dc4baa1",
+  "llama_dual_run_id": "49adaacd",
+  "deepseek_dual_run_id": "974ed8d7",
+  "deepseek_native": {
+    "scenario": "labwars",
+    "seed": 0,
+    "provider": "deepseek",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 60,
+    "policy_mode": "llm_native",
+    "cognitive_sampling_top_k": null,
+    "run_id": "153050a1",
+    "channels": {
+      "y_private": 0.15252426794193186,
+      "y_public": 0.15252426794193186,
+      "y_action": 0.238875
+    }
+  },
+  "diffs_vs_scripted": {
+    "y_private": 0.001612187259351222,
+    "y_public": 0.001612187259351222,
+    "y_action": -0.010792499999999983
+  },
+  "diffs_vs_llama_dual": {
+    "y_private": 0.002282209257779999,
+    "y_public": 0.002282209257779999,
+    "y_action": -0.010641249999999991
+  },
+  "diffs_vs_deepseek_dual": {
+    "y_private": 0.002282209257779999,
+    "y_public": 0.002282209257779999,
+    "y_action": -0.010641249999999991
+  }
+}

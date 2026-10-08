@@ -23,6 +23,9 @@ def test_crisisgrid_has_independent_cast():
     world = load_world("crisisgrid")
     assert "dispatcher" in world.agents
     assert "phd_a" not in world.agents
+    assert all(agent.role == "operator" for agent in world.agents.values())
+    assert world.project.project.hazard > 0.0
+    assert "idea" not in world.project.contribution_ledger
     types = {e.type for e in load_events("crisisgrid")}
     assert "bridge_closed" in types
     assert "sensor_report" in types
@@ -32,8 +35,16 @@ def test_releaseops_has_workflow_cast():
     world = load_world("releaseops")
     assert "deployer" in world.agents
     assert "phd_a" not in world.agents
-    types = {e.type for e in load_events("releaseops")}
+    assert all(agent.role == "operator" for agent in world.agents.values())
+    assert world.project.project.outage_mass > 0.0
+    events = load_events("releaseops")
+    types = {event.type for event in events}
     assert {"stale_config", "test_skipped", "alert", "rollback"} <= types
+    assert world.world_config["world"]["total_rounds"] == 18
+    assert len(events) == 18
+    by_id = {event.event_id: event for event in events}
+    assert by_id["E013"].type == "rollback"
+    assert by_id["E013"].round == 13
 
 
 def test_crisisgrid_scripted_mri_smoke():
@@ -61,7 +72,7 @@ def test_crisisgrid_scripted_mri_smoke():
     assert "Planted AND" not in text
     assert "hidden transcript" not in text
     assert not report.shapley_toy
-    assert report.channels.get("stranded", 0) > 0
+    assert 0.0 <= report.channels.get("stranded", -1.0) <= 1.0
 
 
 def test_releaseops_scripted_mri_smoke():

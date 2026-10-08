@@ -146,7 +146,7 @@ def classify_forks(factual: RunLog, twin: RunLog, *, outcome: str = "protest_aut
     y0 = extract_outcome(factual, outcome)
     y1 = extract_outcome(twin, outcome)
     outcome_hit = None
-    if abs(y1 - y0) >= 0.02:
+    if y1 != y0:
         outcome_hit = {
             "identical": False,
             "fork_kind": "outcome",

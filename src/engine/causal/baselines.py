@@ -1,7 +1,8 @@
-"""Baselines and ablations for RQ1/RQ2 on mechanism worlds.
+"""Baselines for the budgeted oracle.
 
-Baselines: recency, text similarity, LLM-direct ranking, single-event knockout.
-Ablations: no typed IR, no slice, knockout-only, independent vs shared Gumbel.
+Paper baselines are knockout and mediation. recency, text overlap, and the
+hash stand-in for an LLM are recorded under not_baselines and stay out of
+the paper table.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from typing import Any
 from src.engine.causal.mechanisms import (
     evaluate_mechanism_world,
     parameterized_worlds,
-    recover_cstar,
 )
 from src.engine.causal.noise import STREAM_ACTION_GUMBEL, keyed_gumbel, keyed_uniform
 
@@ -52,6 +52,29 @@ def knockout_baseline(world: MechanismWorld) -> list[str]:
             best_delta = delta
             best = factor
     return [best] if best is not None else []
+
+
+def mediation_baseline(world: MechanismWorld) -> list[str]:
+    """Pair with the largest positive Harsanyi dividend. Not the budgeted search."""
+    factors = list(world.factors)
+    empty = world.value_fn(frozenset())
+    best_score = 0.0
+    best: list[str] | None = None
+    for i, left in enumerate(factors):
+        for right in factors[i + 1:]:
+            y_both = world.value_fn(frozenset({left, right}))
+            y_left = world.value_fn(frozenset({left}))
+            y_right = world.value_fn(frozenset({right}))
+            interaction = y_both - y_left - y_right + empty
+            if interaction > best_score + 1e-9:
+                best_score = interaction
+                if y_left <= empty + 1e-9 and y_right <= empty + 1e-9:
+                    best = [left, right]
+                else:
+                    best = [left] if y_left >= y_right else [right]
+    if best:
+        return best
+    return knockout_baseline(world)
 
 
 def random_candidates(world: MechanismWorld, rng: random.Random, k: int = 2) -> list[str]:
@@ -106,35 +129,52 @@ def gumbel_agreement(n: int = 40, seed: int = 11) -> dict[str, float]:
 
 
 BASELINES = {
+    "knockout": knockout_baseline,
+    "mediation": mediation_baseline,
+}
+
+NOT_BASELINES = {
     "recency": recency_baseline,
     "text_similarity": text_similarity_baseline,
     "llm_direct": llm_direct_baseline,
-    "knockout": knockout_baseline,
 }
 
 ABLATIONS = {
-    "no_slice": lambda w, rng: random_candidates(w, rng, k=len(w.true_minimal) or 1),
+    "no_slice": lambda w, rng: random_candidates(w, rng, k=2),
     "knockout_only": lambda w, rng: knockout_only_recovery(w),
-    "oracle_cstar": lambda w, rng: recover_cstar(w),
 }
 
 
 def evaluate_baselines(n_per_family: int = 8, seed: int = 11) -> dict[str, Any]:
-    worlds = parameterized_worlds(n_per_family, seed)
+    """Knockout and mediation are the paper baselines. Hash and character overlap are not."""
+    worlds = [w for w in parameterized_worlds(n_per_family, seed) if not w.timed]
     rng = random.Random(seed)
-    out: dict[str, Any] = {"baselines": {}, "ablations": {}, "gumbel": gumbel_agreement(seed=seed)}
+    out: dict[str, Any] = {
+        "baselines": {},
+        "not_baselines": {},
+        "ablations": {},
+        "gumbel": gumbel_agreement(seed=seed),
+        "note": "text_similarity and llm_direct are straw scores kept out of the paper table",
+    }
+    if not worlds:
+        return out
+
+    def _mean_rows(rows: list[dict[str, Any]]) -> dict[str, float]:
+        n = len(rows) or 1
+        return {
+            "f1": sum(r["f1"] for r in rows) / n,
+            "false_attribution": sum(r["false_attribution"] for r in rows) / n,
+        }
+
     for name, fn in BASELINES.items():
         rows = [evaluate_mechanism_world(w, fn(w)) for w in worlds]
-        out["baselines"][name] = {
-            "f1": sum(r["f1"] for r in rows) / len(rows),
-            "false_attribution": sum(r["false_attribution"] for r in rows) / len(rows),
-        }
+        out["baselines"][name] = _mean_rows(rows)
+    for name, fn in NOT_BASELINES.items():
+        rows = [evaluate_mechanism_world(w, fn(w)) for w in worlds]
+        out["not_baselines"][name] = _mean_rows(rows)
     for name, fn in ABLATIONS.items():
         rows = [evaluate_mechanism_world(w, fn(w, rng)) for w in worlds]
-        out["ablations"][name] = {
-            "f1": sum(r["f1"] for r in rows) / len(rows),
-            "false_attribution": sum(r["false_attribution"] for r in rows) / len(rows),
-        }
+        out["ablations"][name] = _mean_rows(rows)
     oracle = [evaluate_mechanism_world(w) for w in worlds]
     out["oracle"] = {
         "f1": sum(r["f1"] for r in oracle) / len(oracle),

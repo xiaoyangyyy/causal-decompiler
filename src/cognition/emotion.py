@@ -179,7 +179,10 @@ def update_emotion(
 
     e = agent.emotion.model_dump()
     total = EmotionImpulse()
-    gain = observation_gain(channel)
+    leak = 1.0
+    if channel == "rumor" and recall is not None:
+        leak = float((recall.audit or {}).get("rumor_leak") or 0.0)
+    gain = observation_gain(channel, leak=leak)
 
     total.add(_event_impulse(agent, event, gain=gain))
     total.add(_memory_field_impulse(recall, agent), scale=gain if channel != "none" else 0.35)

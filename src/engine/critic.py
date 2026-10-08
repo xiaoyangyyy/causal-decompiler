@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from src.world.actions import ActionType, get_allowed_actions
+from src.world.actions import ActionType, get_allowed_actions, pack_action_names
 from src.world.models import Agent, WorldState
 
 
@@ -39,7 +39,12 @@ class CriticAgent:
         atype = action.get("type")
         intensity = float(action.get("intensity", 0.5))
 
-        allowed = {a.value for a in get_allowed_actions(agent.id, agent.emotion.burnout)}
+        scenario = str(world.world_config.get("scenario") or "")
+        pack_names = pack_action_names(scenario)
+        if pack_names:
+            allowed = set(pack_names)
+        else:
+            allowed = {a.value for a in get_allowed_actions(agent.id, agent.emotion.burnout)}
         if atype not in allowed:
             violations.append(Violation("illegal_action", "hard", f"{atype} not in allowed set for {agent.id}"))
 

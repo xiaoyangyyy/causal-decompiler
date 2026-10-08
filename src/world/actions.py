@@ -57,6 +57,10 @@ class ActionType(str, Enum):
     SUBMIT_WORKSHOP_VERSION = "submit_workshop_version"
     TALK_TO_ALUMNI = "talk_to_alumni"
     NOTIFY_PROGRAM_OFFICER = "notify_program_officer"
+    # Scenario packs. Kept out of the LabWars allowed set.
+    REROUTE = "reroute"
+    RESTORE_RELEASE = "restore_release"
+    DEFER_TEST = "defer_test"
 
 
 ACTION_CATEGORIES: dict[ActionType, ActionCategory] = {
@@ -94,6 +98,9 @@ ACTION_CATEGORIES: dict[ActionType, ActionCategory] = {
     ActionType.SUBMIT_WORKSHOP_VERSION: "external",
     ActionType.TALK_TO_ALUMNI: "external",
     ActionType.NOTIFY_PROGRAM_OFFICER: "external",
+    ActionType.REROUTE: "external",
+    ActionType.RESTORE_RELEASE: "research",
+    ActionType.DEFER_TEST: "research",
 }
 
 
@@ -293,7 +300,31 @@ ACTION_REGISTRY: dict[ActionType, ActionSpec] = {
         ActionType.NOTIFY_PROGRAM_OFFICER, "external",
         (ProjectEffect("funding_pressure", 0.05),),
     ),
+    ActionType.REROUTE: ActionSpec(ActionType.REROUTE, "external", cooperation_level=0.7),
+    ActionType.RESTORE_RELEASE: ActionSpec(ActionType.RESTORE_RELEASE, "research", cooperation_level=0.8),
+    ActionType.DEFER_TEST: ActionSpec(ActionType.DEFER_TEST, "research", cooperation_level=0.3),
 }
+
+PACK_ONLY_ACTIONS = frozenset({
+    ActionType.REROUTE,
+    ActionType.RESTORE_RELEASE,
+    ActionType.DEFER_TEST,
+})
+
+
+def pack_action_names(scenario: str) -> list[str]:
+    """Actions a pack agent can take. LabWars verbs stay out of this list."""
+    if scenario == "crisisgrid":
+        return [ActionType.SHARE_RESULT.value, ActionType.REROUTE.value]
+    if scenario == "releaseops":
+        return [
+            ActionType.RESTORE_RELEASE.value,
+            ActionType.DEFER_TEST.value,
+            ActionType.ANALYZE_FAILURE.value,
+            ActionType.DEBUG_CODE.value,
+            ActionType.SHARE_RESULT.value,
+        ]
+    return []
 
 
 # Per-agent action restrictions (agent_id -> blocked actions)
@@ -315,7 +346,7 @@ def all_action_types() -> list[str]:
 
 def get_allowed_actions(agent_id: str, burnout: float = 0.0) -> list[ActionType]:
     """Return legally available actions; burnout affects probability, not availability."""
-    blocked = set(AGENT_ACTION_RESTRICTIONS.get(agent_id, set()))
+    blocked = set(AGENT_ACTION_RESTRICTIONS.get(agent_id, set())) | set(PACK_ONLY_ACTIONS)
     return [a for a in ActionType if a not in blocked]
 
 

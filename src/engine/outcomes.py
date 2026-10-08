@@ -28,67 +28,129 @@ def ppg_pci(private: float, public: float, action: float) -> dict[str, float]:
     }
 
 
-def _event_types(log: Any) -> set[str]:
-    return {str(ev.get("type") or "") for ev in (getattr(log, "events", None) or [])}
-
-
-def _action_types(log: Any) -> list[str]:
-    return [str(a.get("type") or a.get("action_type") or "") for a in (getattr(log, "actions", None) or [])]
-
-
 CRISISGRID_REPORT_TYPES = frozenset({"bridge_closed", "sensor_report", "citizen_report"})
-CRISISGRID_FORWARD_ACTIONS = frozenset({"share_result", "dispatch_brief", "support_teammate"})
-CRISISGRID_REROUTE_ACTIONS = frozenset({"rebel", "contact_collaborator", "form_alliance", "withdraw"})
+CRISISGRID_FORWARD_TYPES = frozenset({"dispatch_brief", "evac_order"})
+CRISISGRID_FORWARD_ACTIONS = frozenset({"share_result"})
+CRISISGRID_REROUTE_ACTIONS = frozenset({"reroute"})
+RELEASEOPS_DELAY_ACTIONS = frozenset({"defer_test"})
+RELEASEOPS_REPAIR_ACTIONS = frozenset({"restore_release"})
+RELEASEOPS_STALE_TYPES = frozenset({"stale_config"})
+RELEASEOPS_SKIP_TYPES = frozenset({"test_skipped"})
+RELEASEOPS_ALERT_TYPES = frozenset({"alert"})
+RELEASEOPS_ROLLBACK_TYPES = frozenset({"rollback"})
 
 
-def crisisgrid_report_count(log: Any) -> int:
-    return sum(1 for ev in (getattr(log, "events", None) or []) if str(ev.get("type") or "") in CRISISGRID_REPORT_TYPES)
+def _horizon(log: Any, n_events: int) -> int:
+    """Declared length of the run. The denominator is rounds, not the pack's event census."""
+    config = getattr(log, "config", None) or {}
+    declared = int(config.get("max_rounds") or 0)
+    if declared > 0:
+        return max(1, declared)
+    recorded = len(getattr(log, "round_records", None) or [])
+    if recorded > 0:
+        return max(1, recorded)
+    return max(1, n_events)
+
+
+def _rate(count: float, horizon: int) -> float:
+    return _clamp(float(count) / max(1, int(horizon)))
+
+
+def _intensity_sum(log: Any, types: frozenset[str]) -> float:
+    total = 0.0
+    for action in getattr(log, "actions", None) or []:
+        name = str(action.get("type") or action.get("action_type") or "")
+        if name not in types:
+            continue
+        if action.get("intensity") is None:
+            total += 1.0
+        else:
+            total += float(action["intensity"])
+    return total
+
+
+def _count_types(log: Any, types: frozenset[str]) -> int:
+    return sum(1 for ev in (getattr(log, "events", None) or []) if str(ev.get("type") or "") in types)
 
 
 def crisisgrid_channels(log: Any) -> dict[str, float]:
-    types = _event_types(log)
-    actions = set(_action_types(log))
-    n_reports = crisisgrid_report_count(log)
-    # Graded OR of reports: first report 0.5, two 0.75, three 0.875, …
-    report_or = 0.0 if n_reports <= 0 else min(1.0, 1.0 - (0.5 ** n_reports))
-    observed = 1.0 if n_reports else 0.0
-    remembered = 1.0 if any("bridge" in str(ev.get("type") or "") or "sensor" in str(ev.get("type") or "") for ev in (getattr(log, "events", None) or [])) else observed
-    forwarded = 1.0 if ("dispatch_brief" in types or "evac_order" in types or (CRISISGRID_FORWARD_ACTIONS & actions)) else 0.0
-    reroute = 1.0 if CRISISGRID_REROUTE_ACTIONS & actions else 0.0
-    # Mitigation reduces Y but must not zero it while reports remain (share_result ≠ reroute).
-    stranded = _clamp(report_or * (1.0 - 0.45 * forwarded - 0.45 * reroute))
-    evac_delay = _clamp(0.20 + 0.40 * report_or + 0.25 * (1.0 - forwarded) + 0.15 * (1.0 - reroute))
-    util = _clamp(0.35 + 0.35 * forwarded + 0.30 * reroute)
-    private = stranded
-    public = forwarded
-    action = reroute
-    out = ppg_pci(private, public, action)
+    """Primary outcome is stranded: uncovered reports per round.
+
+    Forward events are dispatch and evacuation orders. The only forward action is
+    `share_result`. The only reroute action is `reroute`. A memory covers a report only
+    when its event_ref names that report and the write is not the automatic same-round
+    observation. One cover cancels one report.
+    """
+    events = getattr(log, "events", None) or []
+    horizon = _horizon(log, len(events))
+    reports = _rate(_count_types(log, CRISISGRID_REPORT_TYPES), horizon)
+    forward = _rate(
+        _count_types(log, CRISISGRID_FORWARD_TYPES) + _intensity_sum(log, CRISISGRID_FORWARD_ACTIONS),
+        horizon,
+    )
+    reroute = _rate(_intensity_sum(log, CRISISGRID_REROUTE_ACTIONS), horizon)
+    remembered_n = _relevant_memory_count(log, CRISISGRID_REPORT_TYPES)
+    report_n = _count_types(log, CRISISGRID_REPORT_TYPES)
+    covered = min(
+        report_n,
+        _count_types(log, CRISISGRID_FORWARD_TYPES)
+        + _intensity_sum(log, CRISISGRID_FORWARD_ACTIONS)
+        + _intensity_sum(log, CRISISGRID_REROUTE_ACTIONS)
+        + remembered_n,
+    )
+    stranded = _rate(report_n - covered, horizon)
+    evac_delay = stranded
+    util = _rate(covered, max(1, report_n))
+    out = ppg_pci(stranded, forward, reroute)
     out.update({
         "evac_delay": evac_delay,
         "stranded": stranded,
         "resource_util": util,
-        "observed": observed,
-        "remembered": remembered,
+        "observed": reports,
+        "remembered": _rate(remembered_n, horizon),
     })
     return out
 
 
 def releaseops_channels(log: Any) -> dict[str, float]:
-    types = _event_types(log)
-    actions = set(_action_types(log))
-    stale = 1.0 if "stale_config" in types else 0.0
-    skipped = 1.0 if "test_skipped" in types or "delay_response" in actions else 0.0
-    alert = 1.0 if "alert" in types else 0.0
-    rollback = 1.0 if "rollback" in types or "withdraw" in actions else 0.0
-    failure = _clamp(stale * skipped)
-    outage = _clamp(failure * (1.0 - rollback * alert))
-    rollback_time = _clamp(0.2 + 0.5 * (1.0 - rollback) + 0.3 * failure)
-    # Objective task Y only — do not force performative-compliance channels.
-    task = _clamp(0.55 * failure + 0.30 * outage + 0.15 * rollback_time)
-    out = {
+    """Primary outcome is task_y. Delay raises the skip term. Restore raises rollback.
+
+    Those two actions are not added into one action mass. A memory raises the alert
+    term only when event_ref points at a stale-config event. The stale event stays
+    in the fault count. Rates use the declared horizon.
+    """
+    events = getattr(log, "events", None) or []
+    horizon = _horizon(log, len(events))
+    stale = _rate(_count_types(log, RELEASEOPS_STALE_TYPES), horizon)
+    skipped = _rate(
+        _count_types(log, RELEASEOPS_SKIP_TYPES) + _intensity_sum(log, RELEASEOPS_DELAY_ACTIONS),
+        horizon,
+    )
+    alert = _rate(
+        _count_types(log, RELEASEOPS_ALERT_TYPES) + _relevant_memory_count(log, RELEASEOPS_STALE_TYPES),
+        horizon,
+    )
+    rollback = _rate(
+        _count_types(log, RELEASEOPS_ROLLBACK_TYPES) + _intensity_sum(log, RELEASEOPS_REPAIR_ACTIONS),
+        horizon,
+    )
+    # min is the graded AND: the indicator product is 0 or 1, and the product of
+    # two per-round rates squares a small number. There is no rollback-time floor.
+    failure = _clamp(min(stale, skipped))
+    stale_n = _count_types(log, RELEASEOPS_STALE_TYPES)
+    if stale_n <= 0:
+        suppression = 0.0
+    else:
+        alert_n = _count_types(log, RELEASEOPS_ALERT_TYPES) + _relevant_memory_count(log, RELEASEOPS_STALE_TYPES)
+        rollback_n = _count_types(log, RELEASEOPS_ROLLBACK_TYPES) + _intensity_sum(log, RELEASEOPS_REPAIR_ACTIONS)
+        suppression = min(1.0, alert_n / stale_n) * min(1.0, rollback_n / stale_n)
+    outage = _clamp(failure * (1.0 - suppression))
+    rollback_time = _clamp(failure * (1.0 - rollback))
+    task = outage
+    return {
         "y_private": task,
-        "y_public": task,
-        "y_action": task,
+        "y_public": outage,
+        "y_action": _rate(_intensity_sum(log, RELEASEOPS_REPAIR_ACTIONS), horizon),
         "ppg": 0.0,
         "pci": 0.0,
         "deploy_failure": failure,
@@ -96,11 +158,60 @@ def releaseops_channels(log: Any) -> dict[str, float]:
         "outage": outage,
         "task_y": task,
     }
-    return out
 
 
 def labwars_channels(log: Any, *, private: float, public: float, action: float) -> dict[str, float]:
     return ppg_pci(private, public, action)
+
+
+def _memory_records(log: Any) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    for rec in getattr(log, "round_records", None) or []:
+        deltas = rec.get("agent_deltas") or {}
+        for delta in deltas.values():
+            mem = (delta or {}).get("memory_written")
+            if isinstance(mem, dict) and mem:
+                found.append(mem)
+    return found
+
+
+def _remembered_ids(log: Any) -> set[str]:
+    return {str(mem.get("event_ref")) for mem in _memory_records(log) if mem.get("event_ref")}
+
+
+def _relevant_memory_count(log: Any, types: frozenset[str]) -> int:
+    """Memories that name a qualifying event and are not the automatic observation write.
+
+    The cognition step stores one memory on the event's own round. That write
+    restates the event. A later round, a rehearsal, or a record with no round
+    is what the outcome can use.
+    """
+    by_id = {
+        str(event.get("event_id")): event
+        for event in (getattr(log, "events", None) or [])
+        if event.get("event_id") and str(event.get("type") or "") in types
+    }
+    seen: set[str] = set()
+    count = 0
+    for mem in _memory_records(log):
+        ref = str(mem.get("event_ref") or "")
+        event = by_id.get(ref)
+        if event is None or ref in seen:
+            continue
+        mem_round = mem.get("round")
+        event_round = event.get("round")
+        rehearsed = float(mem.get("rehearsal_count") or 0.0) > 0.0
+        automatic = (
+            mem_round is not None
+            and event_round is not None
+            and int(mem_round) == int(event_round)
+            and not rehearsed
+        )
+        if automatic:
+            continue
+        seen.add(ref)
+        count += 1
+    return count
 
 
 def three_channel_y(log: Any, *, private: float | None = None, public: float | None = None, action: float | None = None) -> dict[str, float]:

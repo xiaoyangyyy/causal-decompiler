@@ -1,0 +1,270 @@
+{
+  "rows": [
+    {
+      "scenario": "labwars",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 60,
+      "run_id": "fda93c1e",
+      "channels": {
+        "y_private": 0.24183021255969672,
+        "y_public": 0.11882702684450193,
+        "y_action": 0.25
+      }
+    },
+    {
+      "scenario": "labwars",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 60,
+      "run_id": "30f0d757",
+      "channels": {
+        "y_private": 0.2387646321711996,
+        "y_public": 0.12859771546180676,
+        "y_action": 0.25
+      }
+    },
+    {
+      "scenario": "labwars",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 60,
+      "run_id": "643d3ebd",
+      "channels": {
+        "y_private": 0.23856581548123668,
+        "y_public": 0.13427329953216524,
+        "y_action": 0.25
+      }
+    },
+    {
+      "scenario": "labwars",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 60,
+      "run_id": "8e74186f",
+      "channels": {
+        "y_private": 0.12108065047088408,
+        "y_public": 0.01695129106592377,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "labwars",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 60,
+      "run_id": "81083a86",
+      "channels": {
+        "y_private": 0.1253138343764881,
+        "y_public": 0.06670018218095194,
+        "y_action": 0.25
+      }
+    },
+    {
+      "scenario": "labwars",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 60,
+      "run_id": "ca489f4d",
+      "channels": {
+        "y_private": 0.1376311459312939,
+        "y_public": 0.07683225014700747,
+        "y_action": 0.25
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 24,
+      "run_id": "27dbc615",
+      "channels": {
+        "y_private": 0.5497314453125001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 24,
+      "run_id": "8379862e",
+      "channels": {
+        "y_private": 0.5497314453125001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 24,
+      "run_id": "4edac9cc",
+      "channels": {
+        "y_private": 0.5497314453125001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 24,
+      "run_id": "76091506",
+      "channels": {
+        "y_private": 0.5414062500000001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 24,
+      "run_id": "93dce39e",
+      "channels": {
+        "y_private": 0.5414062500000001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "crisisgrid",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 24,
+      "run_id": "2f74e5be",
+      "channels": {
+        "y_private": 0.5414062500000001,
+        "y_public": 1.0,
+        "y_action": 0.0
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 16,
+      "run_id": "224a3573",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 16,
+      "run_id": "2584abe2",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 1.0,
+      "rounds": 16,
+      "run_id": "4ffb28b6",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 0,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 16,
+      "run_id": "976b7073",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 1,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 16,
+      "run_id": "9bc9981b",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    },
+    {
+      "scenario": "releaseops",
+      "seed": 2,
+      "provider": "scripted",
+      "anchor_keep_fraction": 0.5,
+      "rounds": 16,
+      "run_id": "ea662008",
+      "channels": {
+        "y_private": 0.625,
+        "y_public": 0.625,
+        "y_action": 0.625
+      }
+    }
+  ],
+  "errors": [],
+  "decision": {
+    "claim": "cross_model_not_identified",
+    "model_contrast": {
+      "status": "second_model_unavailable",
+      "providers": [
+        "scripted"
+      ],
+      "moved": false
+    },
+    "anchor_contrast": {
+      "status": "compared",
+      "diffs": {
+        "y_private": -0.04001229059677419,
+        "y_public": -0.024579368716065697,
+        "y_action": -0.02777777777777779
+      },
+      "moved_channels": [
+        "y_private",
+        "y_public",
+        "y_action"
+      ],
+      "moved": true,
+      "threshold": 0.02
+    },
+    "threshold": 0.02
+  },
+  "second_provider_probe": {
+    "provider": "ollama",
+    "model": "llama3.2",
+    "error": null
+  }
+}

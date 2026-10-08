@@ -201,6 +201,9 @@ def _base_motives(agent: Agent, world: WorldState, event: EventAtom, target: str
         "integrity_pressure": integrity_pressure,
         "cooperation_norm": _clamp(0.45 * personality.cooperation + 0.30 * beliefs.team_trust + 0.25 * emotion.loyalty),
         "fatigue": emotion.burnout,
+        "hazard_exposure": float(project.hazard),
+        "outage_pressure": float(project.outage_mass),
+        "skip_pressure": float(project.skip_mass),
     }
 
 
@@ -368,7 +371,7 @@ def generate_action_candidates(
     *,
     avoid_actions: list[str] | None = None,
     seed: int = 0,
-    top_n: int = 8,
+    top_n: int | None = None,
     observation_gain_value: float | None = None,
 ) -> list[ActionCandidate]:
     cfg = get_action_field_config()
@@ -412,7 +415,11 @@ def generate_action_candidates(
             time_open = _sigmoid((event.round / 60.0) - 0.35, scale=8.0)
             timing_adjustment = -float(params["talk_to_alumni_time_penalty"]) * (1.0 - time_open)
         emotional_bonus = 0.0
-        if ACTION_CATEGORIES.get(ActionType(action)) == "emotional":
+        try:
+            category = ACTION_CATEGORIES.get(ActionType(action))
+        except ValueError:
+            category = None
+        if category == "emotional":
             emotional_bonus = float(params["emotional_action_bonus"]) * motives["resentment_drive"]
         noise = float(params["noise_amplitude"])
         noise_contrib = keyed_uniform_centered(
@@ -464,7 +471,9 @@ def generate_action_candidates(
         ))
 
     candidates.sort(key=lambda c: c.tendency, reverse=True)
-    kept = candidates[: max(1, min(top_n, len(candidates)))]
+    if top_n is not None:
+        candidates = candidates[: max(1, min(int(top_n), len(candidates)))]
+    kept = candidates
     arousal = agent.emotion.anger + agent.emotion.resentment + agent.emotion.anxiety * 0.5
     temperature = float(params["temperature_base"]) + float(params["temperature_arousal_scale"]) * (1.0 - _clamp(arousal / float(params["temperature_arousal_norm"])))
     if block_work:

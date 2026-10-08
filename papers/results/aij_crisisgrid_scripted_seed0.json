@@ -1,0 +1,13 @@
+{
+  "scenario": "crisisgrid",
+  "seed": 0,
+  "provider": "scripted",
+  "anchor_keep_fraction": 1.0,
+  "rounds": 24,
+  "run_id": "c1d3b5ba",
+  "channels": {
+    "y_private": 0.0,
+    "y_public": 1.0,
+    "y_action": 1.0
+  }
+}

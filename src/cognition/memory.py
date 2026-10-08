@@ -36,6 +36,16 @@ CONTENT_TYPE_BY_EVENT: dict[str, str] = {
     "deadline_shift": "authority_signal",
     "rival_preprint": "rival_threat",
     "external_history": "historical_pattern",
+    "bridge_closed": "authority_signal",
+    "sensor_report": "authority_signal",
+    "citizen_report": "authority_signal",
+    "dispatch_brief": "authority_signal",
+    "evac_order": "authority_signal",
+    "stale_config": "integrity_signal",
+    "test_skipped": "integrity_signal",
+    "alert": "integrity_signal",
+    "rollback": "integrity_signal",
+    "deploy_failure": "integrity_signal",
 }
 
 
@@ -225,6 +235,7 @@ def write_memory(
     *,
     channel: str = "direct",
     world: Any | None = None,
+    leak: float = 1.0,
 ) -> MemoryRecord | None:
     if channel == "direct" and not can_directly_observe(agent, event):
         return None
@@ -244,8 +255,9 @@ def write_memory(
     valence = compute_valence(agent, event, content_type)
     evidence_quality = truth_status_precision(event.truth_status) * (0.6 + 0.4 * event.memory_salience)
     if channel == "rumor":
-        evidence_quality *= 0.55
-        valence *= 0.72
+        weight = max(0.0, min(1.0, float(leak)))
+        evidence_quality *= 0.55 * weight
+        valence *= 0.72 * weight
     s0 = initial_strength(event, evidence_quality, valence)
 
     if llm_adapter is None:

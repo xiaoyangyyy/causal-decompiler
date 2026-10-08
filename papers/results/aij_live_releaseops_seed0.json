@@ -1,0 +1,34 @@
+{
+  "endpoint": "live",
+  "scripted": {
+    "scenario": "releaseops",
+    "seed": 0,
+    "provider": "scripted",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 18,
+    "run_id": "f57b3bca",
+    "channels": {
+      "y_private": 0.0,
+      "y_public": 0.0,
+      "y_action": 0.7750611111111112
+    }
+  },
+  "llama": {
+    "scenario": "releaseops",
+    "seed": 0,
+    "provider": "ollama",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 18,
+    "run_id": "e7b342a8",
+    "channels": {
+      "y_private": 0.0,
+      "y_public": 0.0,
+      "y_action": 0.8872611111111113
+    }
+  },
+  "diffs": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.11220000000000008
+  }
+}

@@ -1,0 +1,245 @@
+{
+  "benchmark": {
+    "n": 200,
+    "cause_set_f1": 1.0,
+    "interaction_sign_accuracy": 1.0,
+    "pairwise_sign_accuracy": 0.6,
+    "and_pairwise_sign_accuracy": 0.4,
+    "intervention_budget_mean": 7.74,
+    "false_attribution_rate": 0.0,
+    "failure_rate": 0.0,
+    "by_family": {
+      "and_synergy": {
+        "n": 50,
+        "f1": 1.0,
+        "sign_accuracy": 1.0,
+        "pairwise_sign_accuracy": 0.4,
+        "false_attribution": 0.0,
+        "mean_budget": 13.0
+      },
+      "or_redundancy": {
+        "n": 50,
+        "f1": 1.0,
+        "sign_accuracy": 1.0,
+        "pairwise_sign_accuracy": 1.0,
+        "false_attribution": 0.0,
+        "mean_budget": 7.28
+      },
+      "delayed_mediation": {
+        "n": 50,
+        "f1": 1.0,
+        "sign_accuracy": 1.0,
+        "pairwise_sign_accuracy": 0.0,
+        "false_attribution": 0.0,
+        "mean_budget": 4.0
+      },
+      "suppressor": {
+        "n": 50,
+        "f1": 1.0,
+        "sign_accuracy": 1.0,
+        "pairwise_sign_accuracy": 1.0,
+        "false_attribution": 0.0,
+        "mean_budget": 6.68
+      }
+    }
+  },
+  "baselines": {
+    "baselines": {
+      "knockout": {
+        "f1": 0.5083333333333333,
+        "false_attribution": 0.3333333333333333
+      },
+      "mediation": {
+        "f1": 0.5499999999999999,
+        "false_attribution": 0.3333333333333333
+      }
+    },
+    "not_baselines": {
+      "recency": {
+        "f1": 0.0,
+        "false_attribution": 1.0
+      },
+      "text_similarity": {
+        "f1": 0.0,
+        "false_attribution": 1.0
+      },
+      "llm_direct": {
+        "f1": 0.2347222222222222,
+        "false_attribution": 0.6666666666666666
+      }
+    },
+    "ablations": {
+      "no_slice": {
+        "f1": 0.5499999999999999,
+        "false_attribution": 0.75
+      },
+      "knockout_only": {
+        "f1": 0.5083333333333333,
+        "false_attribution": 0.3333333333333333
+      }
+    },
+    "gumbel": {
+      "shared_agreement": 1.0,
+      "independent_agreement": 0.45,
+      "n": 40.0
+    },
+    "note": "text_similarity and llm_direct are straw scores kept out of the paper table",
+    "oracle": {
+      "f1": 1.0,
+      "sign_accuracy": 1.0
+    }
+  },
+  "heldout": {
+    "family": "exactly_two",
+    "n": 20,
+    "default_budget": 16,
+    "cause_set_f1": 0.0,
+    "failure_rate": 1.0,
+    "budget_curve": [
+      {
+        "budget": 16.0,
+        "f1": 0.0,
+        "failure_rate": 1.0
+      },
+      {
+        "budget": 32.0,
+        "f1": 0.0,
+        "failure_rate": 1.0
+      },
+      {
+        "budget": 64.0,
+        "f1": 0.0,
+        "failure_rate": 1.0
+      }
+    ],
+    "note": "The monotone leave-one-out procedure never queries the size-2 sets this family requires. A larger budget inside the same procedure does not repair that."
+  },
+  "identification_holds": true,
+  "counterexamples": [
+    {
+      "name": "suppressor",
+      "knockout": [
+        "suppressor"
+      ],
+      "recovered": [
+        "cause"
+      ],
+      "knockout_is_suppressor": true,
+      "recovered_is_cause": true,
+      "holds": true
+    },
+    {
+      "name": "or_redundancy",
+      "recovered": [
+        "c0"
+      ],
+      "alternatives": [
+        [
+          "c0"
+        ],
+        [
+          "c1"
+        ],
+        [
+          "c2"
+        ]
+      ],
+      "holds": true
+    },
+    {
+      "name": "and_k3",
+      "pairwise_dividend": 0.0,
+      "k_order_dividend": 1.0,
+      "deletion_sum": 3.0,
+      "total_effect": 1.0,
+      "recovered": [
+        "c0",
+        "c1",
+        "c2"
+      ],
+      "holds": true
+    },
+    {
+      "name": "exactly_two",
+      "f1": 0.0,
+      "failure_rate": 1.0,
+      "holds": true,
+      "budget_curve": [
+        {
+          "budget": 16.0,
+          "f1": 0.0,
+          "failure_rate": 1.0
+        },
+        {
+          "budget": 32.0,
+          "f1": 0.0,
+          "failure_rate": 1.0
+        },
+        {
+          "budget": 64.0,
+          "f1": 0.0,
+          "failure_rate": 1.0
+        }
+      ]
+    }
+  ],
+  "alpha_sensitivity": [
+    {
+      "alpha": 0.8,
+      "cause_set_f1": 1.0,
+      "interaction_sign_accuracy": 1.0
+    },
+    {
+      "alpha": 0.9,
+      "cause_set_f1": 1.0,
+      "interaction_sign_accuracy": 1.0
+    },
+    {
+      "alpha": 0.95,
+      "cause_set_f1": 1.0,
+      "interaction_sign_accuracy": 1.0
+    }
+  ],
+  "statements": [
+    "A1 assumption: CRN identity twin on frozen U",
+    "A2 assumption: LLM prompt replay until the first prompt mismatch",
+    "A3 assumption: Memory IRF is an interventional analogue, not a natural indirect effect",
+    "A4 assumption: Minimal cause set is searched over evaluated ops, not a full do-algebra",
+    "A5 assumption: Reported fork is earliest meaningful (semantic/behavioral), not string mismatch",
+    "P1 proposition: On a deterministic monotone set-oracle, budgeted_recover with budget >= 2n+3 returns one minimal sufficient set and, for OR, the list of size-1 alternatives. Non-monotone exactly-k families are outside P1."
+  ],
+  "external": {
+    "system": "external-log-v1",
+    "identity_y": 1.0,
+    "identity_ok": true,
+    "effects": [
+      {
+        "layer": "do_event",
+        "y": 0.0,
+        "ate": -1.0
+      },
+      {
+        "layer": "do_visibility",
+        "y": 0.0,
+        "ate": -1.0
+      },
+      {
+        "layer": "do_memory",
+        "y": 0.0,
+        "ate": -1.0
+      },
+      {
+        "layer": "do_behavior",
+        "y": 0.0,
+        "ate": -1.0
+      }
+    ],
+    "necessary_layers": [
+      "do_event",
+      "do_visibility",
+      "do_memory",
+      "do_behavior"
+    ],
+    "minimal_set_size": 4
+  }
+}

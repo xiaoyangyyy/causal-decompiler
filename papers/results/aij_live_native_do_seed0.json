@@ -1,0 +1,25 @@
+{
+  "endpoint": "live",
+  "policy_mode": "llm_native",
+  "seed": 0,
+  "cells": {
+    "crisisgrid:factual": {
+      "row": {
+        "scenario": "crisisgrid",
+        "seed": 0,
+        "provider": "deepseek",
+        "anchor_keep_fraction": 1.0,
+        "rounds": 24,
+        "policy_mode": "llm_native",
+        "cognitive_sampling_top_k": null,
+        "causal_do": {},
+        "run_id": "61d6c76f",
+        "channels": {
+          "y_private": 0.0,
+          "y_public": 1.0,
+          "y_action": 0.0
+        }
+      }
+    }
+  }
+}

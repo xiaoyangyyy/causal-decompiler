@@ -49,7 +49,6 @@ def sim_config_from_log(log: RunLog, **overrides) -> SimConfig:
         trust_lesion=bool(c.get("trust_lesion")),
         observation_lesion=bool(c.get("observation_lesion")),
         cognitive_sampling_top_k=c.get("cognitive_sampling_top_k"),
-        cognitive_sampling_threshold=float(c.get("cognitive_sampling_threshold") or 0.0),
         llm_provider=c.get("llm_provider"),
         llm_model=c.get("llm_model"),
         llm_temperature=c.get("llm_temperature"),

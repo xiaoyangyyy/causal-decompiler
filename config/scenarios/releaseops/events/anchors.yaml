@@ -284,3 +284,39 @@ events:
   memory_salience: 0.7
   is_anchor: true
   description: alert
+- event_id: E017
+  round: 17
+  type: rollback
+  visibility: team
+  source: deployer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: rollback
+    verifiable_claims:
+    - rollback
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: rollback
+- event_id: E018
+  round: 18
+  type: deploy_failure
+  visibility: team
+  source: deployer
+  targets:
+  - product
+  - deployer
+  payload: {}
+  objective_fact:
+    raw_statement: deploy_failure
+    verifiable_claims:
+    - deploy_failure
+  framing: neutral
+  truth_status: verified
+  memory_salience: 0.7
+  is_anchor: true
+  description: deploy_failure

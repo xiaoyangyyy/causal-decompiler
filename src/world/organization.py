@@ -39,6 +39,7 @@ ROLE_DEFAULT_GOALS = {
     AgentRole.REVIEWER: "evaluate_paper",
     AgentRole.PROGRAM_OFFICER: "protect_funding_integrity",
     AgentRole.ALUMNI: "warn_or_reinterpret_history",
+    AgentRole.OPERATOR: "keep_the_operation_stable",
 }
 
 
@@ -200,13 +201,13 @@ def can_directly_observe(agent: Agent, event: EventAtom) -> bool:
     return False
 
 
-def rumor_recipients(world: WorldState, event: EventAtom, *, threshold: float = 0.22) -> list[str]:
-    """Deterministic gossip leakage for bilateral / private events."""
+def rumor_leaks(world: WorldState, event: EventAtom) -> dict[str, float]:
+    """Gossip weight for each non-participant. Zero weight means no path."""
     if str(event.visibility or "team") not in {"bilateral", "private"}:
-        return []
+        return {}
     participants = {event.source, *[t for t in event.targets if t in world.agents]}
     edges = _edge_map(world)
-    leaked: list[str] = []
+    leaked: dict[str, float] = {}
     for agent_id, agent in world.agents.items():
         if agent_id in participants or agent.role in EXTERNAL_ROLES:
             continue
@@ -218,9 +219,14 @@ def rumor_recipients(world: WorldState, event: EventAtom, *, threshold: float = 
                 if edge is None:
                     continue
                 leak = max(leak, edge.communication_frequency * edge.information_access)
-        if leak >= threshold:
-            leaked.append(agent_id)
+        if leak > 0.0:
+            leaked[agent_id] = leak
     return leaked
+
+
+def rumor_recipients(world: WorldState, event: EventAtom) -> list[str]:
+    """Agents with a positive gossip weight."""
+    return list(rumor_leaks(world, event))
 
 
 def observation_channel(
@@ -240,19 +246,22 @@ def observation_channel(
     return "none"
 
 
-def observation_gain(channel: str) -> float:
-    return float(OBSERVATION_GAIN.get(channel, 0.0))
+def observation_gain(channel: str, *, leak: float = 1.0) -> float:
+    base = float(OBSERVATION_GAIN.get(channel, 0.0))
+    if channel == "rumor":
+        return base * clamp(float(leak))
+    return base
 
 
-def perceived_event(event: EventAtom, channel: str) -> EventAtom:
+def perceived_event(event: EventAtom, channel: str, *, leak: float = 1.0) -> EventAtom:
     """Event as this observer actually received it — weaker cue if rumor or blind."""
     if channel == "direct":
         return event
     ev = event.model_copy(deep=True)
     if channel == "rumor":
-        ev.memory_salience = clamp(float(event.memory_salience) * 0.55)
+        ev.memory_salience = clamp(float(event.memory_salience) * 0.55 * clamp(float(leak)))
         ev.truth_status = "rumored"
         return ev
-    ev.memory_salience = min(float(event.memory_salience), 0.03)
-    ev.truth_status = "rumored"
+    ev.memory_salience = 0.0
+    ev.truth_status = "unobserved"
     return ev

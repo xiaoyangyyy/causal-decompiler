@@ -9,15 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.engine.causal.identification import IDENTIFICATION_STATEMENTS
 from src.engine.causal.search import harsanyi_from_shapley, minimal_sufficient_set
 
-DEFAULT_ASSUMPTIONS = (
-    "CRN identity twin on frozen U",
-    "LLM prompt replay until the first prompt mismatch",
-    "Memory IRF is an interventional analogue, not a natural indirect effect",
-    "Minimal cause set is searched over evaluated ops, not a full do-algebra",
-    "Reported fork is earliest meaningful (semantic/behavioral), not string mismatch",
-)
+DEFAULT_ASSUMPTIONS = IDENTIFICATION_STATEMENTS
 
 
 def _fork_payload(fork: dict[str, Any] | None) -> dict[str, Any] | None:

@@ -1,0 +1,13 @@
+{
+  "scenario": "labwars",
+  "seed": 0,
+  "provider": "ollama",
+  "anchor_keep_fraction": 1.0,
+  "rounds": 60,
+  "run_id": "fdad2b93",
+  "channels": {
+    "y_private": 0.24183021255969672,
+    "y_public": 0.13648209673704176,
+    "y_action": 0.25
+  }
+}

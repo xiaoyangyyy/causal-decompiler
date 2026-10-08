@@ -29,6 +29,25 @@ def test_social_physics_policy_is_field_only():
     assert all(a.get("llm_action_scoring", {}).get("source") == "field_only" for a in log.actions)
 
 
+def test_native_full_cast_keeps_every_action_on_the_model():
+    log = run_simulation(
+        SimConfig(
+            max_rounds=1,
+            seed=0,
+            interventions=[],
+            scenario="labwars",
+            mvp=False,
+            llm_provider="scripted",
+            policy_mode="llm_native",
+            cognitive_sampling_top_k=None,
+        )
+    )
+    assert len(log.actions) > 1
+    assert all(
+        a.get("llm_action_scoring", {}).get("source") == "llm_native_generated" for a in log.actions
+    )
+
+
 def test_dual_engine_and_native_modes_run():
     field = run_simulation(SimConfig(max_rounds=3, seed=0, interventions=[], policy_mode="social_physics", llm_provider="scripted"))
     dual = run_simulation(SimConfig(max_rounds=3, seed=0, interventions=[], policy_mode="dual_engine", llm_provider="scripted"))

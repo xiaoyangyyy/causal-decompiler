@@ -135,10 +135,14 @@ def test_rumor_can_write_second_hand_memory(llm_adapter):
     assert any(m.get("channel") == "rumor" for m in world.agents["phd_a"].memory)
 
 
-def test_bilateral_event_does_not_move_blind_agent_beliefs():
+def test_zero_leak_does_not_move_beliefs():
     world = load_world()
     events = {e.event_id: e for e in load_events()}
     event = events["E030"]
+    for edge in world.relationships:
+        if "engineer_e" in (edge.source, edge.target):
+            edge.communication_frequency = 0.0
+            edge.information_access = 0.0
     eng_before = world.agents["engineer_e"].beliefs.pi_fairness
     phd_before = world.agents["phd_a"].beliefs.pi_fairness
     result = process_event_phase(world, event)
@@ -146,6 +150,27 @@ def test_bilateral_event_does_not_move_blind_agent_beliefs():
     assert result.agent_deltas["phd_a"]["observation_channel"] == "direct"
     assert world.agents["engineer_e"].beliefs.pi_fairness == eng_before
     assert world.agents["phd_a"].beliefs.pi_fairness < phd_before
+
+
+def test_rumor_belief_move_scales_with_leak():
+    events = {e.event_id: e for e in load_events()}
+    event = events["E030"]
+
+    def moved(leak: float) -> float:
+        world = load_world()
+        for edge in world.relationships:
+            if "engineer_e" in (edge.source, edge.target):
+                edge.communication_frequency = leak
+                edge.information_access = 1.0
+        before = world.agents["engineer_e"].beliefs.pi_fairness
+        result = process_event_phase(world, event)
+        assert result.agent_deltas["engineer_e"]["observation_channel"] == "rumor"
+        return abs(world.agents["engineer_e"].beliefs.pi_fairness - before)
+
+    weak = moved(0.2)
+    strong = moved(0.8)
+    assert weak > 0.0
+    assert strong > weak
 
 
 def test_team_event_updates_internal_witness_affect():

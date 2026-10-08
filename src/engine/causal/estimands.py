@@ -138,8 +138,12 @@ def paired_split_effects(
 
 
 def default_memory_irf_rounds(log: RunLog) -> list[int]:
-    cast = story_cast_from_log(log)
     max_round = max((int(r.get("round") or 0) for r in log.round_records), default=int(log.config.get("max_rounds") or 0))
+    if scenario_of(log) != "labwars":
+        if max_round < 1:
+            return []
+        return [max(1, max_round // 2)]
+    cast = story_cast_from_log(log)
     beats = [cast.memory_cluster_min, 20, 45, cast.draft_round]
     seen: set[int] = set()
     out: list[int] = []

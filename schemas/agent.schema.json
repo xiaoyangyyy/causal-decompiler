@@ -24,7 +24,8 @@
         "rival_lab",
         "reviewer",
         "program_officer",
-        "alumni"
+        "alumni",
+        "operator"
       ]
     },
     "display_name": { "type": "string" },

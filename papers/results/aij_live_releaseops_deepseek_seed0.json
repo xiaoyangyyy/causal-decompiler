@@ -1,0 +1,29 @@
+{
+  "endpoint": "live",
+  "model": "deepseek-v4-flash",
+  "scripted_run_id": "f57b3bca",
+  "llama_run_id": "e7b342a8",
+  "deepseek": {
+    "scenario": "releaseops",
+    "seed": 0,
+    "provider": "deepseek",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 18,
+    "run_id": "b321d418",
+    "channels": {
+      "y_private": 0.0,
+      "y_public": 0.0,
+      "y_action": 0.7748444444444446
+    }
+  },
+  "diffs_vs_scripted": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": -0.0002166666666666428
+  },
+  "diffs_vs_llama": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": -0.11241666666666672
+  }
+}

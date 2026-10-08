@@ -19,7 +19,7 @@ from src.cognition.pressure_fields import summarize_pressure_fields
 from src.engine.causal.llm_trace import LLMTrace, TracingAdapter, bind_llm_trace, current_llm_trace, reset_llm_trace
 from src.engine.causal.noise import NoiseLog, bind_noise_log, reset_noise_log
 from src.engine.critic import CriticAgent
-from src.engine.event_agent import EventAgent, is_agent_active
+from src.engine.event_agent import EventAgent
 from src.engine.intervention import (
     Intervention,
     apply_event_override,
@@ -68,9 +68,9 @@ class SimConfig:
     trust_lesion: bool = False
     observation_lesion: bool = False
     cognitive_sampling_top_k: int | None = None
-    cognitive_sampling_threshold: float = 0.0
     causal_do: dict[str, Any] = field(default_factory=dict)
     scenario: str = "labwars"
+    anchor_keep_fraction: float = 1.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,12 +94,12 @@ class SimConfig:
             "trust_lesion": self.trust_lesion,
             "observation_lesion": self.observation_lesion,
             "cognitive_sampling_top_k": self.cognitive_sampling_top_k,
-            "cognitive_sampling_threshold": self.cognitive_sampling_threshold,
             "causal_do": dict(self.causal_do or {}),
             "llm_provider": self.llm_provider,
             "llm_model": self.llm_model,
             "llm_temperature": self.llm_temperature,
             "scenario": self.scenario,
+            "anchor_keep_fraction": self.anchor_keep_fraction,
         }
 
 
@@ -265,6 +265,12 @@ def _seal_run_log(
 
 
 def _apply_causal_do_event(event, causal_do: dict[str, Any], idea: str):
+    drop_types = {str(item) for item in (causal_do.get("drop_event_types") or [])}
+    if str(event.type) in drop_types:
+        payload = dict(event.payload or {})
+        payload["do_original_type"] = event.type
+        event.payload = payload
+        event.type = "do_absent"
     hide_id = causal_do.get("hide_event_id")
     if hide_id and str(event.event_id) == str(hide_id):
         hide_from = causal_do.get("hide_from") or idea
@@ -273,18 +279,21 @@ def _apply_causal_do_event(event, causal_do: dict[str, Any], idea: str):
     return event
 
 
-def _apply_causal_do_actions(actions: list[dict[str, Any]], causal_do: dict[str, Any], round_num: int) -> None:
+def _apply_causal_do_actions(actions: list[dict[str, Any]], causal_do: dict[str, Any], round_num: int) -> list[dict[str, Any]]:
+    drop_types = {str(item) for item in (causal_do.get("drop_action_types") or [])}
+    kept = [act for act in actions if str(act.get("type") or "") not in drop_types]
     stmt = causal_do.get("force_public")
     agent = causal_do.get("force_public_agent")
     frm = int(causal_do.get("force_public_from") or 0)
     if not stmt or not agent or round_num < frm:
-        return
-    for act in actions:
+        return kept
+    for act in kept:
         if str(act.get("agent") or "") != str(agent):
             continue
         public = dict(act.get("public_position") or {})
         public["statement_type"] = stmt
         act["public_position"] = public
+    return kept
 
 
 def _apply_causal_do_beliefs(world: WorldState, causal_do: dict[str, Any], round_num: int) -> None:
@@ -309,8 +318,6 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
             mvp = load_mvp_config()
             cfg.active_agents = cfg.active_agents or mvp.active_agents
             cfg.offstage_agents = cfg.offstage_agents or mvp.offstage_agents
-            if cfg.max_rounds == 60:
-                cfg.max_rounds = mvp.max_rounds
 
     run_id = cfg.run_id or str(uuid.uuid4())[:8]
     log = RunLog(run_id=run_id, config=cfg.to_dict())
@@ -329,10 +336,15 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
     else:
         llm = TracingAdapter(inner, trace)
     hits0, misses0 = trace.hits, trace.misses
+    events = load_events(cfg.scenario)
+    fraction = float(cfg.anchor_keep_fraction)
+    if fraction < 1.0:
+        for event in events:
+            event.memory_salience = max(0.0, min(1.0, float(event.memory_salience) * fraction))
     event_agent = EventAgent(
         seed=cfg.seed,
         state_events=not cfg.disable_state_events,
-        events=load_events(cfg.scenario),
+        events=events,
     )
     policy = RolePolicyAgent(llm=llm)
     critic = CriticAgent()
@@ -348,13 +360,11 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
         "llm_action_score_mix": cfg.llm_action_score_mix,
         "active_agents": cfg.active_agents,
         "offstage_agents": cfg.offstage_agents,
-        "offstage_min_round": 21,
         "hierarchy_lesion": cfg.hierarchy_lesion,
         "status_lesion": cfg.status_lesion,
         "trust_lesion": cfg.trust_lesion,
         "observation_lesion": cfg.observation_lesion,
         "cognitive_sampling_top_k": cfg.cognitive_sampling_top_k,
-        "cognitive_sampling_threshold": cfg.cognitive_sampling_threshold,
     }
 
     round_num = 0
@@ -420,7 +430,7 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
                 vetted_actions.append(act)
 
             if cfg.causal_do:
-                _apply_causal_do_actions(vetted_actions, cfg.causal_do, round_num)
+                vetted_actions = _apply_causal_do_actions(vetted_actions, cfg.causal_do, round_num)
 
             for act in vetted_actions:
                 log.record_action(act["agent"], act, round_num)
