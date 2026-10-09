@@ -20,6 +20,34 @@
           "y_action": 0.0
         }
       }
+    },
+    "crisisgrid:drop_forwards": {
+      "row": {
+        "scenario": "crisisgrid",
+        "seed": 0,
+        "provider": "deepseek",
+        "anchor_keep_fraction": 1.0,
+        "rounds": 24,
+        "policy_mode": "llm_native",
+        "cognitive_sampling_top_k": null,
+        "causal_do": {
+          "drop_event_types": [
+            "dispatch_brief",
+            "evac_order"
+          ]
+        },
+        "run_id": "60be32a5",
+        "channels": {
+          "y_private": 0.0,
+          "y_public": 1.0,
+          "y_action": 0.0
+        }
+      },
+      "diffs_vs_factual": {
+        "y_private": 0.0,
+        "y_public": 0.0,
+        "y_action": 0.0
+      }
     }
   }
 }

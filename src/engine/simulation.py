@@ -352,9 +352,12 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
     event_cast = resolve_event_cast(world)
     log.config["event_cast"] = event_cast_asdict(event_cast)
 
+    forbid_action_types = [str(item) for item in (cfg.causal_do or {}).get("forbid_action_types") or []]
+    world.world_config["forbid_action_types"] = forbid_action_types
     sim_config_dict = {
         "seed": cfg.seed,
         "policy_mode": cfg.policy_mode,
+        "forbid_action_types": forbid_action_types,
         "enable_llm_action_scoring": cfg.enable_llm_action_scoring,
         "cognitive_policy_lambda": cfg.cognitive_policy_lambda,
         "llm_action_score_mix": cfg.llm_action_score_mix,
@@ -426,7 +429,7 @@ def _run_simulation(cfg: SimConfig, noise: NoiseLog, trace: LLMTrace) -> RunLog:
                     log.critic_violations.extend([
                         {"round": round_num, "agent": act["agent"], **v.__dict__} for v in violations
                     ])
-                    act, _ = critic.fix_or_reject(act, agent, violations)
+                    act, _ = critic.fix_or_reject(act, agent, violations, world)
                 vetted_actions.append(act)
 
             if cfg.causal_do:

@@ -108,9 +108,10 @@ class TestCritic:
         critic = CriticAgent()
         agent = load_world().agents["engineer_e"]
         bad = {"type": "ask_for_authorship", "target": "pi", "intensity": 0.8}
-        violations = critic.check(bad, agent, load_world())
+        world = load_world()
+        violations = critic.check(bad, agent, world)
         assert any(v.severity == "hard" for v in violations)
-        fixed, _ = critic.fix_or_reject(bad, agent, violations)
+        fixed, _ = critic.fix_or_reject(bad, agent, violations, world)
         assert fixed["type"] != "ask_for_authorship"
 
 

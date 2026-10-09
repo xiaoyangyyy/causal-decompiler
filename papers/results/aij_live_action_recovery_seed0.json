@@ -1,0 +1,112 @@
+{
+  "endpoint": "live",
+  "alpha": 0.9,
+  "crisisgrid": {
+    "logs": {
+      "share_result": "61d6c76f",
+      "reroute": "6edb6581"
+    },
+    "set": [
+      "share_result"
+    ],
+    "alternatives": [
+      [
+        "share_result"
+      ],
+      [
+        "reroute"
+      ]
+    ],
+    "reason": "redundant: any listed singleton recovers Y",
+    "interaction": "redundant",
+    "interaction_index": -0.2916666666666667,
+    "y": {
+      "\u2205": -0.2916666666666667,
+      "share_result": -0.0,
+      "reroute": -0.0,
+      "reroute,share_result": -0.0
+    },
+    "empty_from_reroute": -0.2916666666666667,
+    "sensitivity": {
+      "0.8": {
+        "set": [
+          "share_result"
+        ],
+        "alternatives": [
+          [
+            "share_result"
+          ],
+          [
+            "reroute"
+          ]
+        ]
+      },
+      "0.9": {
+        "set": [
+          "share_result"
+        ],
+        "alternatives": [
+          [
+            "share_result"
+          ],
+          [
+            "reroute"
+          ]
+        ]
+      },
+      "0.95": {
+        "set": [
+          "share_result"
+        ],
+        "alternatives": [
+          [
+            "share_result"
+          ],
+          [
+            "reroute"
+          ]
+        ]
+      }
+    }
+  },
+  "releaseops": {
+    "logs": {
+      "factual": "cfc2f482",
+      "substitute_actions": "3a028da7"
+    },
+    "set": [
+      "restore_release"
+    ],
+    "alternatives": [],
+    "reason": "Minimal Effect-Recovery Set at \u03b1=0.9 (v(S)\u2265\u03b1 v(Top-k))",
+    "interaction": "redundant",
+    "interaction_index": -0.14166666666666666,
+    "y": {
+      "\u2205": -0.18888888888888888,
+      "restore_release": -0.0,
+      "rollback": -0.04722222222222222,
+      "restore_release,rollback": -0.0
+    },
+    "substitute_harm": 0.05555555555555555,
+    "sensitivity": {
+      "0.8": {
+        "set": [
+          "restore_release"
+        ],
+        "alternatives": []
+      },
+      "0.9": {
+        "set": [
+          "restore_release"
+        ],
+        "alternatives": []
+      },
+      "0.95": {
+        "set": [
+          "restore_release"
+        ],
+        "alternatives": []
+      }
+    }
+  }
+}

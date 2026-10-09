@@ -1,0 +1,79 @@
+{
+  "endpoint": "live",
+  "policy_mode": "llm_native",
+  "seed": 0,
+  "cells": {
+    "crisisgrid": {
+      "forbid_action_types": [
+        "share_result"
+      ],
+      "account_run_id": "61d6c76f",
+      "account": {
+        "y_private": 0.2916666666666667,
+        "y_public": 0.16666666666666666,
+        "y_action": 0.0
+      },
+      "row": {
+        "scenario": "crisisgrid",
+        "seed": 0,
+        "provider": "deepseek",
+        "anchor_keep_fraction": 1.0,
+        "rounds": 24,
+        "policy_mode": "llm_native",
+        "cognitive_sampling_top_k": null,
+        "causal_do": {
+          "forbid_action_types": [
+            "share_result"
+          ]
+        },
+        "run_id": "6edb6581",
+        "channels": {
+          "y_private": 0.0,
+          "y_public": 0.16666666666666666,
+          "y_action": 1.0
+        }
+      },
+      "diffs_vs_account": {
+        "y_private": -0.2916666666666667,
+        "y_public": 0.0,
+        "y_action": 1.0
+      }
+    },
+    "releaseops": {
+      "forbid_action_types": [
+        "restore_release"
+      ],
+      "account_run_id": "cfc2f482",
+      "account": {
+        "y_private": 0.04722222222222222,
+        "y_public": 0.04722222222222222,
+        "y_action": 0.0
+      },
+      "row": {
+        "scenario": "releaseops",
+        "seed": 0,
+        "provider": "deepseek",
+        "anchor_keep_fraction": 1.0,
+        "rounds": 18,
+        "policy_mode": "llm_native",
+        "cognitive_sampling_top_k": null,
+        "causal_do": {
+          "forbid_action_types": [
+            "restore_release"
+          ]
+        },
+        "run_id": "3a028da7",
+        "channels": {
+          "y_private": 0.05555555555555555,
+          "y_public": 0.05555555555555555,
+          "y_action": 0.0
+        }
+      },
+      "diffs_vs_account": {
+        "y_private": 0.008333333333333331,
+        "y_public": 0.008333333333333331,
+        "y_action": 0.0
+      }
+    }
+  }
+}

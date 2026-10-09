@@ -33,18 +33,26 @@ ACTION_PUBLIC_COMPATIBILITY: dict[str, set[str]] = {
 }
 
 ESCALATING_ACTIONS = {"confront", "challenge_claim", "ask_for_authorship", "withdraw", "rebel", "blame"}
+
+
+def _scenario_allowed(agent: Agent, world: WorldState) -> list[str]:
+    scenario = str(world.world_config.get("scenario") or "")
+    pack_names = pack_action_names(scenario)
+    if pack_names:
+        allowed = list(pack_names)
+    else:
+        allowed = [a.value for a in get_allowed_actions(agent.id, agent.emotion.burnout)]
+    forbidden = {str(item) for item in (world.world_config.get("forbid_action_types") or [])}
+    return [name for name in allowed if name not in forbidden]
+
+
 class CriticAgent:
     def check(self, action: dict[str, Any], agent: Agent, world: WorldState) -> list[Violation]:
         violations: list[Violation] = []
         atype = action.get("type")
         intensity = float(action.get("intensity", 0.5))
 
-        scenario = str(world.world_config.get("scenario") or "")
-        pack_names = pack_action_names(scenario)
-        if pack_names:
-            allowed = set(pack_names)
-        else:
-            allowed = {a.value for a in get_allowed_actions(agent.id, agent.emotion.burnout)}
+        allowed = set(_scenario_allowed(agent, world))
         if atype not in allowed:
             violations.append(Violation("illegal_action", "hard", f"{atype} not in allowed set for {agent.id}"))
 
@@ -99,14 +107,22 @@ class CriticAgent:
         action: dict[str, Any],
         agent: Agent,
         violations: list[Violation],
+        world: WorldState,
     ) -> tuple[dict[str, Any], list[Violation]]:
         hard = [v for v in violations if v.severity == "hard"]
         if not hard:
             return action, violations
 
+        allowed = _scenario_allowed(agent, world)
+        allowed_set = set(allowed)
+        if not allowed_set:
+            return action, violations
+        selected = str((action.get("selected_action") or {}).get("type") or "")
         fallback_pool = ["comply", "document_contribution", "share_result", "write_section", "seek_validation"]
-        allowed = {a.value for a in get_allowed_actions(agent.id, agent.emotion.burnout)}
-        fallback = next((f for f in fallback_pool if f in allowed), "comply" if "comply" in allowed else list(allowed)[0])
+        if selected in allowed_set:
+            fallback = selected
+        else:
+            fallback = next((name for name in fallback_pool if name in allowed_set), allowed[0])
 
         fixed = dict(action)
         fixed["type"] = fallback

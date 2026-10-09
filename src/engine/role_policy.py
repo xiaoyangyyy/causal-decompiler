@@ -461,6 +461,15 @@ class RolePolicyAgent:
         pack_names = pack_action_names(scenario)
         if pack_names:
             allowed_str = pack_names
+            render_allowed = [ActionType(name) for name in pack_names]
+        else:
+            render_allowed = allowed
+        forbidden = {str(item) for item in (config.get("forbid_action_types") or [])}
+        if forbidden:
+            allowed_str = [name for name in allowed_str if name not in forbidden]
+            render_allowed = [action for action in render_allowed if action.value not in forbidden]
+        if not allowed_str or not render_allowed:
+            return None
 
         seed = int(config.get("seed", 0) or 0)
         policy_mode = str(config.get("policy_mode", "dual_engine"))
@@ -585,7 +594,7 @@ class RolePolicyAgent:
                     "target": selected_payload["target"],
                     "intensity": selected_payload["intensity"],
                 }
-                act = _normalize_action_response(raw, agent, event, world, allowed)
+                act = _normalize_action_response(raw, agent, event, world, render_allowed)
                 private = act.setdefault("private_intent", {})
                 private.setdefault("private_motives", selected_payload.get("motives", {}))
                 act["action_candidates"] = candidate_payload

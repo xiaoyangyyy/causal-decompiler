@@ -1,0 +1,52 @@
+{
+  "endpoint": "live",
+  "kind": "factual_plus_recorded_log_mutilation",
+  "policy_mode": "llm_native",
+  "seed": 0,
+  "factual_row": {
+    "scenario": "releaseops",
+    "seed": 0,
+    "provider": "deepseek",
+    "anchor_keep_fraction": 1.0,
+    "rounds": 18,
+    "policy_mode": "llm_native",
+    "cognitive_sampling_top_k": null,
+    "causal_do": {},
+    "run_id": "cfc2f482",
+    "channels": {
+      "y_private": 0.0,
+      "y_public": 0.0,
+      "y_action": 0.3194444444444444
+    }
+  },
+  "counts": {
+    "rollback_events": 3,
+    "restore_release_actions": 10
+  },
+  "factual": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.3194444444444444
+  },
+  "drop_rollbacks": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.3194444444444444
+  },
+  "diffs_drop_rollbacks": {
+    "y_private": 0.0,
+    "y_public": 0.0,
+    "y_action": 0.0
+  },
+  "drop_restore": {
+    "y_private": 0.04722222222222222,
+    "y_public": 0.04722222222222222,
+    "y_action": 0.0
+  },
+  "diffs_drop_restore": {
+    "y_private": 0.04722222222222222,
+    "y_public": 0.04722222222222222,
+    "y_action": -0.3194444444444444
+  },
+  "live_drop_restore": true
+}

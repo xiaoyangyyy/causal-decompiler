@@ -1,0 +1,27 @@
+{
+  "endpoint": "live",
+  "kind": "recorded_log_mutilation",
+  "source_run_id": "61d6c76f",
+  "note": "share_result intensity set to 0 on the saved llm_native log. No new model calls. Reroute was already absent, so it was not run as its own cell.",
+  "counts": {
+    "reports": 11,
+    "forward_events": 4,
+    "remembered": 0,
+    "reroute_actions": 0
+  },
+  "factual": {
+    "y_private": 0.0,
+    "y_public": 1.0,
+    "y_action": 0.0
+  },
+  "drop_share_result": {
+    "y_private": 0.2916666666666667,
+    "y_public": 0.16666666666666666,
+    "y_action": 0.0
+  },
+  "diffs_vs_factual": {
+    "y_private": 0.2916666666666667,
+    "y_public": -0.8333333333333334,
+    "y_action": 0.0
+  }
+}
